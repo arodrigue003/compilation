@@ -68,7 +68,7 @@ char *double_to_hex_str(double d) {
 %token TYPE_NAME
 %token INT DOUBLE VOID
 %token IF ELSE DO WHILE RETURN FOR
-%type <s> primary_expression postfix_expression unary_expression multiplicative_expression additive_expression
+%type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression
 %start program
 %union {
   char *string;
@@ -80,15 +80,24 @@ char *double_to_hex_str(double d) {
 
 conditional_expression
 : logical_or_expression
+{
+    $$ = $1;
+}
 ;
 
 logical_or_expression
 : logical_and_expression
+{
+    $$ = $1;
+}
 | logical_or_expression OR logical_and_expression
 ;
 
 logical_and_expression
 : comparison_expression
+{
+    $$ = $1;
+}
 | logical_and_expression AND comparison_expression
 ;
 
@@ -96,8 +105,8 @@ logical_and_expression
 shift_expression
 : additive_expression
 {
-    cout << $1->code.str();
-    delete $1;
+    //cout << $1->code.str();
+    //delete $1; //TODO : remove it
 }
 | shift_expression SHL additive_expression
 | shift_expression SHR additive_expression
@@ -105,6 +114,9 @@ shift_expression
 
 primary_expression
 : IDENTIFIER
+{
+    $$ = new expression(_INT, new_var());
+}
 | CONSTANTI    
 {
     $$ = new expression(_INT, new_var());
@@ -118,8 +130,11 @@ primary_expression
     free(nb_double);
 }
 | '(' expression ')'
-| IDENTIFIER '(' ')'
-| IDENTIFIER '(' argument_expression_list ')'
+{
+    $$ = $2;
+}
+| IDENTIFIER '(' ')' //appel de fonction
+| IDENTIFIER '(' argument_expression_list ')' //appel de fonction
 ;
 
 postfix_expression
@@ -128,7 +143,35 @@ postfix_expression
     $$ = $1;
 }
 | postfix_expression INC_OP
+{
+    if ($1->getT() == _INT) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $1->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", 1\n";
+    }
+    else if ($1->getT() == _DOUBLE) {
+        $$ = new expression(_INT, new_var());
+        char *nb_double = double_to_hex_str(1.0);
+        $$->code << $1->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", " << nb_double << "\n";
+        free(nb_double);
+    }
+    delete $1;
+    $1 = NULL;
+}
 | postfix_expression DEC_OP
+{
+    if ($1->getT() == _INT) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $1->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $1->getVar() << ", 1\n";
+    }
+    else if ($1->getT() == _DOUBLE) {
+        $$ = new expression(_INT, new_var());
+        char *nb_double = double_to_hex_str(1.0);
+        $$->code << $1->code.str() << "%x" << $$->getVar() << " = fsub double %x" << $1->getVar() << ", " << nb_double << "\n";
+        free(nb_double);
+    }
+    delete $1;
+    $1 = NULL;
+}
 ;
 
 argument_expression_list
@@ -142,13 +185,53 @@ unary_expression
     $$ = $1;
 }
 | INC_OP unary_expression
+{
+    if ($2->getT() == _INT) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $2->getVar() << ", 1\n";
+    }
+    else if ($2->getT() == _DOUBLE) {
+        $$ = new expression(_INT, new_var());
+        char *nb_double = double_to_hex_str(1.0);
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $2->getVar() << ", " << nb_double << "\n";
+        free(nb_double);
+    }
+    delete $2;
+    $2 = NULL;
+}
 | DEC_OP unary_expression
-| unary_operator unary_expression
+{
+    if ($2->getT() == _INT) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $2->getVar() << ", 1\n";
+    }
+    else if ($2->getT() == _DOUBLE) {
+        $$ = new expression(_INT, new_var());
+        char *nb_double = double_to_hex_str(1.0);
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fsub double %x" << $2->getVar() << ", " << nb_double << "\n";
+        free(nb_double);
+    }
+    delete $2;
+    $2 = NULL;
+}
+| '-' unary_expression
+{
+    if ($2->getT() == _INT) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = sub i32 0, %x" << $2->getVar() << "\n";
+    }
+    else if ($2->getT() == _DOUBLE) {
+        $$ = new expression(_INT, new_var());
+        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fsub double 0x000000000000000, %x" << $2->getVar() << "\n";
+    }
+    delete $2;
+    $2 = NULL;
+}
 ;
 
-unary_operator
+/*unary_operator
 : '-'
-;
+;*/
 
 multiplicative_expression
 : unary_expression
@@ -160,32 +243,97 @@ multiplicative_expression
     if ($1->getT() == _INT) {
         if ($3->getT() == _INT) {
             $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = mul i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
         }
         else if ($3->getT() == _DOUBLE) {
             int conversion = new_var();
-            $$ = new expression(_INT, new_var());
-
-            //asprintf(&$$->old, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $1->getVar(), $$->getVar(), $3->getVar(), conversion);
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fmul double %x" << $3->getVar() << ", %x" << conversion << "\n";
         }
     }
     else if($1->getT() == _DOUBLE) {
         if ($3->getT() == _INT) {
             int conversion = new_var();
-            $$ = new expression(_INT, new_var());
-            //asprintf(&$$->old, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $3->getVar(), $$->getVar(), $1->getVar(), conversion);
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fmul double %x" << $1->getVar() << ", %x" << conversion << "\n";
         }
         else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_INT, new_var());
+            $$ = new expression(_DOUBLE, new_var());
             $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
+            //asprintf(&$$->old, "%s%s%%x%d = fmul double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
         }
     }
     delete $1;
+    $1 = NULL;
     delete $3;
+    $3 = NULL;
 }
 | multiplicative_expression '/' unary_expression
+{
+    if ($1->getT() == _INT) {
+        if ($3->getT() == _INT) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = sdiv i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fdiv double %x" << $3->getVar() << ", %x" << conversion << "\n";
+        }
+    }
+    else if($1->getT() == _DOUBLE) {
+        if ($3->getT() == _INT) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fdiv double %x" << $1->getVar() << ", %x" << conversion << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            //asprintf(&$$->old, "%s%s%%x%d = fdiv double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
+        }
+    }
+    delete $1;
+    $1 = NULL;
+    delete $3;
+    $3 = NULL;
+}
 | multiplicative_expression REM unary_expression
+{
+    if ($1->getT() == _INT) {
+        if ($3->getT() == _INT) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = srem i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = frem double %x" << $3->getVar() << ", %x" << conversion << "\n";
+        }
+    }
+    else if($1->getT() == _DOUBLE) {
+        if ($3->getT() == _INT) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = frem double %x" << $1->getVar() << ", %x" << conversion << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            //asprintf(&$$->old, "%s%s%%x%d = frem double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
+        }
+    }
+    delete $1;
+    $1 = NULL;
+    delete $3;
+    $3 = NULL;
+}
 ;
 
 additive_expression
@@ -194,11 +342,76 @@ additive_expression
     $$ = $1;
 }
 | additive_expression '+' multiplicative_expression
+{
+    if ($1->getT() == _INT) {
+        if ($3->getT() == _INT) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fadd double %x" << $3->getVar() << ", %x" << conversion << "\n";
+        }
+    }
+    else if($1->getT() == _DOUBLE) {
+        if ($3->getT() == _INT) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << conversion << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            //asprintf(&$$->old, "%s%s%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
+        }
+    }
+    delete $1;
+    $1 = NULL;
+    delete $3;
+    $3 = NULL;
+}
 | additive_expression '-' multiplicative_expression
+{
+    if ($1->getT() == _INT) {
+        if ($3->getT() == _INT) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fsub double %x" << $3->getVar() << ", %x" << conversion << "\n";
+        }
+    }
+    else if($1->getT() == _DOUBLE) {
+        if ($3->getT() == _INT) {
+            int conversion = new_var();
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+            $$->code << "%x" << $$->getVar() << " = fsub double %x" << $1->getVar() << ", %x" << conversion << "\n";
+        }
+        else if ($3->getT() == _DOUBLE) {
+            $$ = new expression(_DOUBLE, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            //asprintf(&$$->old, "%s%s%%x%d = fsub double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
+        }
+    }
+    delete $1;
+    $1 = NULL;
+    delete $3;
+    $3 = NULL;
+}
 ;
 
 comparison_expression
 : shift_expression
+{
+    $$ = $1;
+}
 | comparison_expression '<' shift_expression
 | comparison_expression '>' shift_expression
 | comparison_expression LE_OP shift_expression
@@ -210,7 +423,9 @@ comparison_expression
 expression
 : unary_expression assignment_operator conditional_expression
 | conditional_expression
-
+{
+    $$ = $1;
+}
 ;
 
 assignment_operator
@@ -283,6 +498,10 @@ statement_list
 expression_statement
 : ';'
 | expression ';'
+{
+    cout << $1->code.str();
+    delete $1;
+}
 ;
 
 selection_statement
@@ -373,7 +592,7 @@ int main (int argc, char *argv[]) {
 	return 1;
     }
 
-    yyparse ();
+    yyparse();
 
     free(file_name);
 
