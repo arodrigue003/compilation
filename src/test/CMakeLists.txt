@@ -1,0 +1,1 @@
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test.c ${CMAKE_CURRENT_BINARY_DIR}/test.c @ONLY)
