@@ -7,8 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
-#include "expression_symbols.h"
+#include "expression_symbols.hpp"
 #include <boost/unordered_map.hpp>
+#include <string>
 
 using namespace std;
 
@@ -95,7 +96,8 @@ logical_and_expression
 shift_expression
 : additive_expression
 {
-    printf("%s", $1->code);
+    cout << $1->code.str();
+    delete $1;
 }
 | shift_expression SHL additive_expression
 | shift_expression SHR additive_expression
@@ -105,14 +107,14 @@ primary_expression
 : IDENTIFIER
 | CONSTANTI    
 {
-    $$ = create_expression(_INT, new_var());
-    asprintf(&$$->code, "%%x%d = add i32 0, %d\n", $$->var, $1);
+    $$ = new expression(_INT, new_var());
+    $$->code << "%x" << $$->getVar() << " = add i32 0, " << $1 << "\n";
 }
 | CONSTANTD
 {
-    $$ = create_expression(_DOUBLE, new_var());
+    $$ = new expression(_DOUBLE, new_var());
     char *nb_double = double_to_hex_str($1);
-    asprintf(&$$->code, "%%x%d = fadd double %s, 0x0000000000000000\n", $$->var, nb_double);
+    $$->code << "%x" << $$->getVar() << " = fadd double 0x000000000000000, " << nb_double << "\n";
     free(nb_double);
 }
 | '(' expression ')'
@@ -155,30 +157,32 @@ multiplicative_expression
 }
 | multiplicative_expression '*' unary_expression
 {
-    if ($1->t == _INT) {
-        if ($3->t == _INT) {
-            $$ = create_expression(_INT, new_var());
-            asprintf(&$$->code, "%s%s%%x%d = add i32 %%x%d, %%x%d\n", $1->code, $3->code, $$->var, $1->var, $3->var);
+    if ($1->getT() == _INT) {
+        if ($3->getT() == _INT) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
         }
-        else if ($3->t == _DOUBLE) {
+        else if ($3->getT() == _DOUBLE) {
             int conversion = new_var();
-            $$ = create_expression(_INT, new_var());
-            asprintf(&$$->code, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $1->var, $$->var, $3->var, conversion);
+            $$ = new expression(_INT, new_var());
+
+            //asprintf(&$$->old, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $1->getVar(), $$->getVar(), $3->getVar(), conversion);
         }
     }
-    else if($1->t == _DOUBLE) {
-        if ($3->t == _INT) {
+    else if($1->getT() == _DOUBLE) {
+        if ($3->getT() == _INT) {
             int conversion = new_var();
-            $$ = create_expression(_INT, new_var());
-            asprintf(&$$->code, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $3->var, $$->var, $1->var, conversion);
+            $$ = new expression(_INT, new_var());
+            //asprintf(&$$->old, "%s%s%%x%d = sitofp i32 %%x%d to double\n%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, conversion, $3->getVar(), $$->getVar(), $1->getVar(), conversion);
         }
-        else if ($3->t == _DOUBLE) {
-            $$ = create_expression(_INT, new_var());
-            asprintf(&$$->code, "%s%s%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, $$->var, $1->var, $3->var);
+        else if ($3->getT() == _DOUBLE) {
+            $$ = new expression(_INT, new_var());
+            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
+            //asprintf(&$$->old, "%s%s%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
         }
     }
-    free($1);
-    free($3);
+    delete $1;
+    delete $3;
 }
 | multiplicative_expression '/' unary_expression
 | multiplicative_expression REM unary_expression
