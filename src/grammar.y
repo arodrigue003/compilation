@@ -1,46 +1,55 @@
 %{
-    #ifndef _GNU_SOURCE
-    #define _GNU_SOURCE
-    #endif //_GNU_SOURCE
-    #define DEBUG
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif //_GNU_SOURCE
+#define DEBUG
 
-    #include <stdio.h>
-    #include <stdlib.h>
-    #include "expression_symbols.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include "expression_symbols.h"
+#include <boost/unordered_map.hpp>
 
-    extern int yylineno;
-    int yyerror(const char *s);
+using namespace std;
 
-    extern "C"
+// headers definition to permit compilation
+extern int yylineno;
+int yyerror(const char *s);
+
+extern "C"
+{
+    int yyparse(void);
+    int yylex(void);
+    int yywrap()
     {
-        int yyparse(void);
-        int yylex(void);  
-        int yywrap()
-        {
-            return 1;
-        }
+        return 1;
     }
+}
 
-    int new_var() {
-        static int i=0;
-        return i++;
-    }
+//Hash map
+typedef boost::unordered_map<std::string, int> map_boost;
 
-    int new_label() {
-        static int i=0;
-        return i++;
-    }
+//utility functions
+int new_var() {
+    static int i=0;
+    return i++;
+}
 
-    char *double_to_hex_str(double d) {   
-        char *s = NULL; 
-        union {
-            double a;
-            long long int b;
-        } u;
-        u.a = d;
-        asprintf(&s, "%#08llx", u.b);
-        return s;
-    }
+int new_label() {
+    static int i=0;
+    return i++;
+}
+
+char *double_to_hex_str(double d) {
+    char *s = NULL;
+    union {
+        double a;
+        long long int b;
+    } u;
+    u.a = d;
+    asprintf(&s, "%#08llx", u.b);
+    return s;
+}
 
 %}
 
@@ -331,6 +340,18 @@ int yyerror (const char *s) {
 
 
 int main (int argc, char *argv[]) {
+
+    map_boost x;
+    x["one"] = 1;
+    x["two"] = 2;
+    x["three"] = 3;
+
+    cout << x.at("one") << endl;
+    cout << x.size() << endl;
+    cout << x.max_size() << endl;
+    assert(x.at("one") == 1);
+    assert(x.find("missing") == x.end());
+
     FILE *input = NULL;
     if (argc==2) {
 	input = fopen (argv[1], "r");

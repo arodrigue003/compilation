@@ -10,7 +10,7 @@ add_custom_command(OUTPUT grammar.cpp grammar.tab.h
                     COMMAND yacc --verbose --debug -d grammar.y -o grammar.cpp --defines=grammar.tab.h
                     DEPENDS grammar.y)
 
-add_library(testlib STATIC lex.yy.c grammar.tab.h)
+add_library(lexer STATIC lex.yy.c grammar.tab.h)
 
 add_executable(parser grammar.cpp expression_symbols.cpp)
-target_link_libraries(parser testlib)
+target_link_libraries(parser lexer)

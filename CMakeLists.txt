@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -O0 -g")
 
 # Define where headers only libs and statics libs are located
-include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/third_party/boost)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/third_party)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 
