@@ -32,7 +32,7 @@ extern "C"
 
 //Hash map
 typedef boost::unordered_map<std::string, struct identifier> map_boost;
-map_boost test_hash;
+map_boost global_hash_table;
 
 //utility functions
 stringstream code;
@@ -163,12 +163,12 @@ primary_expression
 : IDENTIFIER
 {
 
-    if (test_hash.find($1) == test_hash.end()){
+    if (global_hash_table.find($1) == global_hash_table.end()){
         $$ = new expression(_VOID, -1);
         cerr << "Can't find identifier " << $1 << endl;
     }
     else {
-        switch (test_hash.at($1).t) {
+        switch (global_hash_table.at($1).t) {
             case _INT:
                 $$ = new expression(_INT, new_var());
                 $$->code << "%x" << $$->getVar() << " = load i32, i32* %" << $1 << "\n";
@@ -182,6 +182,8 @@ primary_expression
                 break;
         }
     }
+    free($1);
+    $1 = NULL;
 }
 | CONSTANTI    
 {
@@ -492,19 +494,46 @@ expression
 {
     switch ($2) {
         case _EQ_ASSIGN:
-            if (test_hash.find($1) == test_hash.end()){
+            if (global_hash_table.find($1) == global_hash_table.end()){
                 $$ = new expression(_VOID, -1);
                 cerr << "Can't find identifier " << $1 << endl;
             }
             else {
-                switch (test_hash.at($1).t) {
+                int var = $3->getVar();
+                switch (global_hash_table.at($1).t) {
                     case _INT:
-                        $$ = new expression(_INT, 0);
-                        $$->code << $3->code.str() << "store i32 %x" << $3->getVar() << ", i32* %" << $1 << "\n";
+                        $$ = new expression(_INT, -1);
+                        $$->code << $3->code.str();
+                        switch ($3->getT()) {
+                            case _INT:
+                                break;
+                            case _DOUBLE:
+                                // In this case expression mut be converted in an int value
+                                var = new_var();
+                                $$->code << "%x" << var <<  " = fptosi double %x" << $3->getVar() << " to i32\n";
+                                break;
+                            default:
+                                cout << "ERROR\n";
+                                break;
+                        }
+                        $$->code << "store i32 %x" << var << ", i32* %" << $1 << "\n";
                         break;
                     case _DOUBLE:
-                        $$ = new expression(_DOUBLE, 0);
-                        $$->code << $3->code.str() << "store double %x" << $3->getVar() << ", double* %" << $1 << "\n";
+                        $$ = new expression(_DOUBLE, -1);
+                        $$->code << $3->code.str();
+                        switch ($3->getT()) {
+                            case _INT:
+                                // In this case expression mut be converted in an double value
+                                var = new_var();
+                                $$->code << "%x" << var << " = sitofp i32 %x" << $3->getVar() << " to double\n";
+                                break;
+                            case _DOUBLE:
+                                break;
+                            default:
+                                cout << "ERROR\n";
+                                break;
+                        }
+                        $$->code << "store double %x" << var << ", double* %" << $1 << "\n";
                         break;
                     default:
                         cout << "ERROR\n";
@@ -516,6 +545,11 @@ expression
             cout << "ERROR\n";
             break;
     }
+
+    delete $3;
+    $3 = NULL;
+    free($1);
+    $1 = NULL;
 }
 | conditional_expression
 {
@@ -580,7 +614,7 @@ declaration
         id.test = i++;
         id.t = $1;
         id.name = *it;
-        test_hash[*it] = id;
+        global_hash_table[*it] = id;
     }
 
     delete $2;
@@ -597,6 +631,7 @@ declarator_list
 {
     $$ = $1;
     $$->merge($3);
+
     delete $3;
     $3 = NULL;
 }
@@ -622,6 +657,9 @@ declarator
 {
     $$ = new declarator();
     $$->add($1);
+
+    free($1);
+    $1 = NULL;
 }
 | '(' declarator ')'
 /*| declarator '(' parameter_list ')'
@@ -674,7 +712,9 @@ parameter_declaration
     id.register_no = var;
     to_store.push_back(id);
 
-    test_hash[$2] = id;
+    global_hash_table[$2] = id;
+    free($2);
+    $2 = NULL;
 }
 ;
 
@@ -705,12 +745,23 @@ compound_statement
 : '{' '}'
 {
     $$ = new code_container();
-    $$->code << "{\n}\n";
+    $$->code << "{\n";
+
+    add_identifier($$);
+
+    $$->code << "}\n";
 }
 | '{' statement_list '}'
 {
     $$ = new code_container();
-    $$->code << "{\n" << $2->code.str() << "}\n";
+    $$->code << "{\n";
+
+    add_identifier($$);
+
+    $$->code << $2->code.str() << "}\n";
+
+    delete $2;
+    $2 = NULL;
 }
 | '{' declaration_list statement_list '}'
 {
@@ -720,11 +771,23 @@ compound_statement
     add_identifier($$);
 
     $$->code << $2->code.str() << $3->code.str() << "}\n";
+
+    delete $2;
+    $2 = NULL;
+    delete $3;
+    $3 = NULL;
 }
 | '{' declaration_list '}'
 {
     $$ = new code_container();
-    $$->code << "{\n" << $2->code.str() << "}\n";
+    $$->code << "{\n";
+
+    add_identifier($$);
+
+    $$->code << $2->code.str() << "}\n";
+
+    delete $2;
+    $2 = NULL;
 }
 ;
 
@@ -813,6 +876,9 @@ jump_statement
             break;
     }
     $$->code << "\n";
+
+    delete $2;
+    $2 = NULL;
 }
 ;
 
@@ -845,13 +911,15 @@ function_definition
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " (" << $4->code.str() << ")\n" << $6->code.str();
+    code << "@" << $2 << " (" << $4->code.str() << ")\n" << $6->code.str() << "\n";
 
 
     delete $4;
     $4 = NULL;
     delete $6;
     $6 = NULL;
+    free($2);
+    $2 = NULL;
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
@@ -870,11 +938,13 @@ function_definition
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " ( )\n" << $5->code.str();
+    code << "@" << $2 << " ()\n" << $5->code.str() << "\n";
 
 
     delete $5;
     $5 = NULL;
+    free($2);
+    $2 = NULL;
 }
 ;
 
@@ -893,48 +963,38 @@ extern FILE *yyin;
 
 
 int yyerror (const char *s) {
-    fflush (stdout);
-    fprintf (stderr, "%s:%d:%d: %s\n", file_name, yylineno, column, s);
+
+    cerr << file_name << ":" << yylineno << ":" << column << ": " << s << endl;
     return 0;
 }
 
 
 int main (int argc, char *argv[]) {
 
-    /*map_boost x;
-    x["one"] = 1;
-    x["two"] = 2;
-    x["three"] = 3;
-
-    cout << x.at("one") << endl;
-    cout << x.size() << endl;
-    cout << x.max_size() << endl;
-    assert(x.at("one") == 1);
-    assert(x.find("missing") == x.end());*/
-
     FILE *input = NULL;
     if (argc==2) {
-	input = fopen (argv[1], "r");
+        input = fopen(argv[1], "r");
 	file_name = strdup (argv[1]);
 	if (input) {
 	    yyin = input;
 	}
 	else {
-	  fprintf (stderr, "%s: Could not open %s\n", *argv, argv[1]);
-	    return 1;
+            cerr << argv[0] << ": Could not open " << argv[1] << endl;
+            return EXIT_FAILURE;
 	}
     }
     else {
-	fprintf (stderr, "%s: error: no input file\n", *argv);
-	return 1;
+        cerr << argv[0] << ": error: no input file" << endl;
+        return EXIT_FAILURE;
     }
 
     yyparse();
     cout << code.str();
 
     free(file_name);
+    fclose(input);
 
-    BOOST_FOREACH(map_boost::value_type i, test_hash) {
+    BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
         std::cout<<i.first<<":"<<i.second.test<<","<<i.second.t<<','<<i.second.name<<"\n";
     }
 
