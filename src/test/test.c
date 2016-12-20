@@ -1,16 +1,26 @@
-void my_setup() {
-	3 * 42.0 * 8 * 44;
-	/*42.0 * 8;
-	8 * 8;
-	8.0 * 8.0;*/
-	3 / 2.0 *42;
-	4 + 4 / 2;
-	4 % 3 + 2;
-	3++;
-	4--;
-	4--;
-	4 + -2;
-	4 + -2.0;
-	++42;
+/*void pile()
+{
+  int a, b, c;
+  a = 5; b = 6;
+  c = a + b;
+}*/
+
+void add_int_double()
+{
+  int a;
+  double b;
+  double c;
+  a = 1;
+  b = 2.0;
+  c = a + b;
 }
 
+/*void add_double_int()
+{
+  double a;
+  int b;
+  int c;
+  a = 1.0;
+  b = 3;
+  c = a + b;
+}*/

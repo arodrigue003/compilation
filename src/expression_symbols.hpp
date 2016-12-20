@@ -6,15 +6,12 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <vector>
+
+#include "enum.h"
 
 using namespace std;
 
-enum simple_type
-{
-    ENTIER,
-    _DOUBLE,
-    _INT
-};
 
 struct expression
 {
@@ -32,6 +29,27 @@ public:
 
     simple_type getT() const;
     int getVar() const;
+};
+
+struct declarator
+{
+private:
+	vector<string> names;
+
+public:
+	declarator(){}
+	void add(char *);
+	void add(string);
+	void show();
+	void merge(declarator *other);
+
+	std::vector<string>::iterator begin();
+	std::vector<string>::iterator end();
+};
+
+struct identifier {
+	enum simple_type t;
+	int test;
 };
 
 #endif // __EXPRESSION_SYMBOLS_H_

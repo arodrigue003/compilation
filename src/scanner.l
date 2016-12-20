@@ -1,6 +1,7 @@
 %{ 
 #include <stdio.h>
 #include <string.h>
+#include "enum.h"
 #include "grammar.tab.h"
 void count();
 int comment();
@@ -21,7 +22,7 @@ L[a-zA-Z_]
 "while"		{ count(); return(WHILE); }
 "for"		{ count(); return(FOR); }
 "do"		{ count(); return(DO); }
-[$]?{L}({L}|{D})*	{ count(); yylval.string=strdup(yytext); return(IDENTIFIER); }
+[$]?{L}({L}|{D})*	{ count(); yylval.string_c=strdup(yytext); return(IDENTIFIER); }
 {D}+    	{ count(); yylval.n=atoi(yytext); return(CONSTANTI); }
 {D}+"."{D}*     { count(); yylval.d=atof(yytext); return(CONSTANTD); }
 "+="		{ count(); return(ADD_ASSIGN); }
