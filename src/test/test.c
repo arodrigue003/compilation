@@ -37,23 +37,21 @@ void add_double_int()
   return;
 }*/
 
-int main()
+/*int main()
 {
 	return 0;
-}
+}*/
 
 
-void add_int_double()
+int main()
 {
-  int a;
-  double b;
-  double c;
-  a = 1;
-  b = 2.0;
-  c = a + b;
+	int a;
+	a = 0;
+	a += 2.0;
+	return a;
 }
 
-void add_double_int()
+/*void add_double_int()
 {
   double a;
   int b;
@@ -61,4 +59,4 @@ void add_double_int()
   a = 1.0;
   b = 3;
   c = a + b;
-}
+}*/

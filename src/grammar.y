@@ -13,6 +13,7 @@
 #include <boost/foreach.hpp>
 #include <string>
 #include <vector>
+#include "utilityFunctions.hpp"
 
 using namespace std;
 
@@ -30,23 +31,14 @@ extern "C"
     }
 }
 
+int indentation_lvl = 0;
+
 //Hash map
-typedef boost::unordered_map<std::string, struct identifier> map_boost;
 map_boost global_hash_table;
 
 //utility functions
 stringstream code;
 vector<identifier> to_store;
-
-int new_var() {
-    static int i=0;
-    return i++;
-}
-
-int new_label() {
-    static int i=0;
-    return i++;
-}
 
 char *double_to_hex_str(double d) {
     char *s = NULL;
@@ -57,37 +49,6 @@ char *double_to_hex_str(double d) {
     u.a = d;
     asprintf(&s, "%#08llx", u.b);
     return s;
-}
-
-void add_identifier(struct code_container * cc) {
-    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it){
-        struct identifier id;
-
-        switch ((*it).t) {
-            case _INT:
-                cc->code << "%" << (*it).name << " = alloca i32\n";
-                break;
-            case _DOUBLE:
-                cc->code << "%" << (*it).name << " = alloca double\n";
-                break;
-            default:
-                cout << "ERROR\n";
-                break;
-        }
-
-        switch ((*it).t) {
-            case _INT:
-                cc->code << "store i32 %x" << (*it).register_no << ", i32* %" << (*it).name << "\n";
-                break;
-           case _DOUBLE:
-                cc->code << "store double %x" << (*it).register_no << ", double* %" << (*it).name << "\n";
-                break;
-            default:
-                cout << "ERROR\n";
-                break;
-        }
-    }
-    to_store.clear();
 }
 
 %}
@@ -152,8 +113,7 @@ logical_and_expression
 shift_expression
 : additive_expression
 {
-    //cout << $1->code.str();
-    //delete $1; //TODO : remove it
+    $$ = $1;
 }
 | shift_expression SHL additive_expression
 | shift_expression SHR additive_expression
@@ -162,28 +122,8 @@ shift_expression
 primary_expression
 : IDENTIFIER
 {
-
-    if (global_hash_table.find($1) == global_hash_table.end()){
-        $$ = new expression(_VOID, -1);
-        cerr << "Can't find identifier " << $1 << endl;
-    }
-    else {
-        switch (global_hash_table.at($1).t) {
-            case _INT:
-                $$ = new expression(_INT, new_var());
-                $$->code << "%x" << $$->getVar() << " = load i32, i32* %" << $1 << "\n";
-                break;
-            case _DOUBLE:
-                $$ = new expression(_DOUBLE, new_var());
-                $$->code << "%x" << $$->getVar() << " = load double, double* %" << $1 << "\n";
-                break;
-            default:
-                cout << "ERROR\n";
-                break;
-        }
-    }
-    free($1);
-    $1 = NULL;
+    $$ = load_identifier($1, global_hash_table);
+    free($1); $1 = NULL;
 }
 | CONSTANTI    
 {
@@ -308,99 +248,18 @@ multiplicative_expression
 }
 | multiplicative_expression '*' unary_expression
 {
-    if ($1->getT() == _INT) {
-        if ($3->getT() == _INT) {
-            $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = mul i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fmul double %x" << $3->getVar() << ", %x" << conversion << "\n";
-        }
-    }
-    else if($1->getT() == _DOUBLE) {
-        if ($3->getT() == _INT) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fmul double %x" << $1->getVar() << ", %x" << conversion << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = fmul double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
-        }
-    }
-    delete $1;
-    $1 = NULL;
-    delete $3;
-    $3 = NULL;
+    $$ = expression_multiplication($1, $3);
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | multiplicative_expression '/' unary_expression
 {
-    if ($1->getT() == _INT) {
-        if ($3->getT() == _INT) {
-            $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = sdiv i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fdiv double %x" << $3->getVar() << ", %x" << conversion << "\n";
-        }
-    }
-    else if($1->getT() == _DOUBLE) {
-        if ($3->getT() == _INT) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fdiv double %x" << $1->getVar() << ", %x" << conversion << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = fdiv double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
-        }
-    }
-    delete $1;
-    $1 = NULL;
-    delete $3;
-    $3 = NULL;
+    $$ = expression_quotient($1, $3);
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | multiplicative_expression REM unary_expression
 {
-    if ($1->getT() == _INT) {
-        if ($3->getT() == _INT) {
-            $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = srem i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = frem double %x" << $3->getVar() << ", %x" << conversion << "\n";
-        }
-    }
-    else if($1->getT() == _DOUBLE) {
-        if ($3->getT() == _INT) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = frem double %x" << $1->getVar() << ", %x" << conversion << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = frem double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
-        }
-    }
-    delete $1;
-    $1 = NULL;
-    delete $3;
-    $3 = NULL;
+    $$ = expression_reste($1, $3);
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 ;
 
@@ -411,67 +270,13 @@ additive_expression
 }
 | additive_expression '+' multiplicative_expression
 {
-    if ($1->getT() == _INT) {
-        if ($3->getT() == _INT) {
-            $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fadd double %x" << $3->getVar() << ", %x" << conversion << "\n";
-        }
-    }
-    else if($1->getT() == _DOUBLE) {
-        if ($3->getT() == _INT) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << conversion << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = fadd double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
-        }
-    }
-    delete $1;
-    $1 = NULL;
-    delete $3;
-    $3 = NULL;
+    $$ = expression_addition($1, $3);
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | additive_expression '-' multiplicative_expression
 {
-    if ($1->getT() == _INT) {
-        if ($3->getT() == _INT) {
-            $$ = new expression(_INT, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $1->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fsub double %x" << $3->getVar() << ", %x" << conversion << "\n";
-        }
-    }
-    else if($1->getT() == _DOUBLE) {
-        if ($3->getT() == _INT) {
-            int conversion = new_var();
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << conversion << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-            $$->code << "%x" << $$->getVar() << " = fsub double %x" << $1->getVar() << ", %x" << conversion << "\n";
-        }
-        else if ($3->getT() == _DOUBLE) {
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << $1->code.str() << $3->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", %x" << $3->getVar() << "\n";
-            //asprintf(&$$->old, "%s%s%%x%d = fsub double %%x%d, %%x%d\n", $1->code, $3->code, $$->getVar(), $1->getVar(), $3->getVar());
-        }
-    }
-    delete $1;
-    $1 = NULL;
-    delete $3;
-    $3 = NULL;
+    $$ = expression_soustraction($1, $3);
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 ;
 
@@ -493,63 +298,63 @@ expression
 // simplification de : unary_expression assignment_operator conditional_expression
 {
     switch ($2) {
+
         case _EQ_ASSIGN:
-            if (global_hash_table.find($1) == global_hash_table.end()){
-                $$ = new expression(_VOID, -1);
-                cerr << "Can't find identifier " << $1 << endl;
-            }
-            else {
-                int var = $3->getVar();
-                switch (global_hash_table.at($1).t) {
-                    case _INT:
-                        $$ = new expression(_INT, -1);
-                        $$->code << $3->code.str();
-                        switch ($3->getT()) {
-                            case _INT:
-                                break;
-                            case _DOUBLE:
-                                // In this case expression mut be converted in an int value
-                                var = new_var();
-                                $$->code << "%x" << var <<  " = fptosi double %x" << $3->getVar() << " to i32\n";
-                                break;
-                            default:
-                                cout << "ERROR\n";
-                                break;
-                        }
-                        $$->code << "store i32 %x" << var << ", i32* %" << $1 << "\n";
-                        break;
-                    case _DOUBLE:
-                        $$ = new expression(_DOUBLE, -1);
-                        $$->code << $3->code.str();
-                        switch ($3->getT()) {
-                            case _INT:
-                                // In this case expression mut be converted in an double value
-                                var = new_var();
-                                $$->code << "%x" << var << " = sitofp i32 %x" << $3->getVar() << " to double\n";
-                                break;
-                            case _DOUBLE:
-                                break;
-                            default:
-                                cout << "ERROR\n";
-                                break;
-                        }
-                        $$->code << "store double %x" << var << ", double* %" << $1 << "\n";
-                        break;
-                    default:
-                        cout << "ERROR\n";
-                        break;
-                }
+            $$ = assign_equal($3, $1, global_hash_table);
+            break;
+
+        case _ADD_ASSIGN:
+            {
+                struct expression *e1 = load_identifier($1, global_hash_table);
+                struct expression *e2 = expression_addition(e1, $3);
+                $$ = assign_equal(e2, $1, global_hash_table);
+                delete e1; e1 = NULL; delete e2; e2 = NULL;
             }
             break;
+
+        case _SUB_ASSIGN:
+            {
+                struct expression *e1 = load_identifier($1, global_hash_table);
+                struct expression *e2 = expression_soustraction(e1, $3);
+                $$ = assign_equal(e2, $1, global_hash_table);
+                delete e1; e1 = NULL; delete e2; e2 = NULL;
+            }
+            break;
+
+        case _MUL_ASSIGN:
+            {
+                struct expression *e1 = load_identifier($1, global_hash_table);
+                struct expression *e2 = expression_multiplication(e1, $3);
+                $$ = assign_equal(e2, $1, global_hash_table);
+                delete e1; e1 = NULL; delete e2; e2 = NULL;
+            }
+            break;
+
+        case _DIV_ASSIGN:
+            {
+                struct expression *e1 = load_identifier($1, global_hash_table);
+                struct expression *e2 = expression_quotient(e1, $3);
+                $$ = assign_equal(e2, $1, global_hash_table);
+                delete e1; e1 = NULL; delete e2; e2 = NULL;
+            }
+            break;
+
+        case _REM_ASSIGN:
+            {
+                struct expression *e1 = load_identifier($1, global_hash_table);
+                struct expression *e2 = expression_reste(e1, $3);
+                $$ = assign_equal(e2, $1, global_hash_table);
+                delete e1; e1 = NULL; delete e2; e2 = NULL;
+            }
+            break;
+
         default:
             cout << "ERROR\n";
+            $$ = new expression(_VOID, -1);
             break;
     }
 
-    delete $3;
-    $3 = NULL;
-    free($1);
-    $1 = NULL;
+    delete $3; $3 = NULL; free($1); $1 = NULL;
 }
 | conditional_expression
 {
@@ -747,7 +552,7 @@ compound_statement
     $$ = new code_container();
     $$->code << "{\n";
 
-    add_identifier($$);
+    add_identifier(to_store, $$);
 
     $$->code << "}\n";
 }
@@ -756,7 +561,7 @@ compound_statement
     $$ = new code_container();
     $$->code << "{\n";
 
-    add_identifier($$);
+    add_identifier(to_store, $$);
 
     $$->code << $2->code.str() << "}\n";
 
@@ -768,7 +573,7 @@ compound_statement
     $$ = new code_container();
     $$->code << "{\n";
 
-    add_identifier($$);
+    add_identifier(to_store, $$);
 
     $$->code << $2->code.str() << $3->code.str() << "}\n";
 
@@ -782,7 +587,7 @@ compound_statement
     $$ = new code_container();
     $$->code << "{\n";
 
-    add_identifier($$);
+    add_identifier(to_store, $$);
 
     $$->code << $2->code.str() << "}\n";
 

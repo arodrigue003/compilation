@@ -12,5 +12,5 @@ add_custom_command(OUTPUT grammar.cpp grammar.tab.h
 
 add_library(lexer STATIC lex.yy.c grammar.tab.h)
 
-add_executable(parser grammar.cpp expression_symbols.cpp)
+add_executable(parser grammar.cpp expression_symbols.cpp utilityFunctions.cpp)
 target_link_libraries(parser lexer)
