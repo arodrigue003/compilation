@@ -12,8 +12,13 @@
 
 using namespace std;
 
+struct code_container
+{
+	stringstream code;
+};
 
-struct expression
+
+struct expression : public code_container
 {
 private:
     enum simple_type t;
@@ -22,7 +27,6 @@ private:
 public:
 	char *old;
 	char *indentifier;
-	stringstream code;
 
     expression(simple_type t, int var);
     virtual ~expression();
@@ -50,6 +54,8 @@ public:
 struct identifier {
 	enum simple_type t;
 	int test;
+	string name;
+	int register_no;
 };
 
 #endif // __EXPRESSION_SYMBOLS_H_

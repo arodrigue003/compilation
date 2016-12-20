@@ -12,6 +12,7 @@
 #include <boost/unordered_map.hpp>
 #include <boost/foreach.hpp>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -35,6 +36,7 @@ map_boost test_hash;
 
 //utility functions
 stringstream code;
+vector<identifier> to_store;
 
 int new_var() {
     static int i=0;
@@ -57,6 +59,37 @@ char *double_to_hex_str(double d) {
     return s;
 }
 
+void add_identifier(struct code_container * cc) {
+    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it){
+        struct identifier id;
+
+        switch ((*it).t) {
+            case _INT:
+                cc->code << "%" << (*it).name << " = alloca i32\n";
+                break;
+            case _DOUBLE:
+                cc->code << "%" << (*it).name << " = alloca double\n";
+                break;
+            default:
+                cout << "ERROR\n";
+                break;
+        }
+
+        switch ((*it).t) {
+            case _INT:
+                cc->code << "store i32 %x" << (*it).register_no << ", i32* %" << (*it).name << "\n";
+                break;
+           case _DOUBLE:
+                cc->code << "store double %x" << (*it).register_no << ", double* %" << (*it).name << "\n";
+                break;
+            default:
+                cout << "ERROR\n";
+                break;
+        }
+    }
+    to_store.clear();
+}
+
 %}
 
 %define parse.error verbose
@@ -76,7 +109,9 @@ char *double_to_hex_str(double d) {
 %type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression
 %type <decla> declarator declarator_list
 %type <st> type_name
-%type <ao> assignment_operator;
+%type <ao> assignment_operator
+%type <c> parameter_list parameter_declaration function_definition
+%type <c> expression_statement declaration declaration_list compound_statement statement_list statement jump_statement iteration_statement selection_statement
 %start program
 %union {
   char *string_c;
@@ -86,6 +121,7 @@ char *double_to_hex_str(double d) {
   struct declarator *decla;
   enum simple_type st;
   enum assignment_op ao;
+  struct code_container *c;
 }
 %%
 
@@ -126,18 +162,25 @@ shift_expression
 primary_expression
 : IDENTIFIER
 {
-    switch (test_hash.at($1).t) {
-        case _INT:
-            $$ = new expression(_INT, new_var());
-            $$->code << "%x" << $$->getVar() << " = load i32, i32* %" << $1 << "\n";
-            break;
-        case _DOUBLE:
-            $$ = new expression(_DOUBLE, new_var());
-            $$->code << "%x" << $$->getVar() << " = load double, double* %" << $1 << "\n";
-            break;
-        default:
-            cout << "ERROR\n";
-            break;
+
+    if (test_hash.find($1) == test_hash.end()){
+        $$ = new expression(_VOID, -1);
+        cerr << "Can't find identifier " << $1 << endl;
+    }
+    else {
+        switch (test_hash.at($1).t) {
+            case _INT:
+                $$ = new expression(_INT, new_var());
+                $$->code << "%x" << $$->getVar() << " = load i32, i32* %" << $1 << "\n";
+                break;
+            case _DOUBLE:
+                $$ = new expression(_DOUBLE, new_var());
+                $$->code << "%x" << $$->getVar() << " = load double, double* %" << $1 << "\n";
+                break;
+            default:
+                cout << "ERROR\n";
+                break;
+        }
     }
 }
 | CONSTANTI    
@@ -449,18 +492,24 @@ expression
 {
     switch ($2) {
         case _EQ_ASSIGN:
-            switch (test_hash.at($1).t) {
-                case _INT:
-                    $$ = new expression(_INT, 0);
-                    $$->code << $3->code.str() << "store i32 %x" << $3->getVar() << ", i32* %" << $1 << "\n";
-                    break;
-                case _DOUBLE:
-                    $$ = new expression(_DOUBLE, 0);
-                    $$->code << $3->code.str() << "store double %x" << $3->getVar() << ", double* %" << $1 << "\n";
-                    break;
-                default:
-                    cout << "ERROR\n";
-                    break;
+            if (test_hash.find($1) == test_hash.end()){
+                $$ = new expression(_VOID, -1);
+                cerr << "Can't find identifier " << $1 << endl;
+            }
+            else {
+                switch (test_hash.at($1).t) {
+                    case _INT:
+                        $$ = new expression(_INT, 0);
+                        $$->code << $3->code.str() << "store i32 %x" << $3->getVar() << ", i32* %" << $1 << "\n";
+                        break;
+                    case _DOUBLE:
+                        $$ = new expression(_DOUBLE, 0);
+                        $$->code << $3->code.str() << "store double %x" << $3->getVar() << ", double* %" << $1 << "\n";
+                        break;
+                    default:
+                        cout << "ERROR\n";
+                        break;
+                }
             }
             break;
         default:
@@ -512,24 +561,26 @@ assignment_operator
 declaration
 : type_name declarator_list ';'
 {
-    struct identifier lol;
-    int i = 0;
+    $$ = new code_container();
+    struct identifier id;
+    static int i = 0;
     for (std::vector<string>::iterator it = $2->begin(); it != $2->end(); ++it){
         switch ($1) {
             case _INT:
-                code << "%" << *it << " = alloca i32\n";
+                $$->code << "%" << *it << " = alloca i32\n";
                 break;
             case _DOUBLE:
-                code << "%" << *it << " = alloca double\n";
+                $$->code << "%" << *it << " = alloca double\n";
                 break;
             default:
                 cout << "ERROR\n";
                 break;
         }
 
-        lol.test = i++;
-        lol.t = $1;
-        test_hash[*it] = lol;
+        id.test = i++;
+        id.t = $1;
+        id.name = *it;
+        test_hash[*it] = id;
     }
 
     delete $2;
@@ -573,49 +624,150 @@ declarator
     $$->add($1);
 }
 | '(' declarator ')'
-| declarator '(' parameter_list ')'
+/*| declarator '(' parameter_list ')'
+{
+    cout << $3->code.str() << endl;
+    $$ = new declarator();
+}
 | declarator '(' ')'
+{
+    cout << "NO PARAMETER" << endl;
+}*/
 ;
 
 parameter_list
 : parameter_declaration
+{
+    $$ = $1;
+}
 | parameter_list ',' parameter_declaration
+{
+    $$ = $1;
+    $$->code << ", " << $3->code.str();
+
+    delete $3;
+    $3 = NULL;
+}
 ;
 
 parameter_declaration
-: type_name declarator
+: type_name IDENTIFIER
+// simplification de type_name declarator
+{
+    int var = new_var();
+    $$ = new code_container();
+    switch ($1) {
+        case _INT:
+            $$->code << "i32 %x" << var;
+            break;
+        case _DOUBLE:
+            $$->code << "double %x" << var;
+            break;
+        default:
+            cout << "ERROR\n";
+            break;
+    }
+    struct identifier id;
+
+    id.t = $1;
+    id.name = $2;
+    id.register_no = var;
+    to_store.push_back(id);
+
+    test_hash[$2] = id;
+}
 ;
 
 statement
 : compound_statement
+{
+    $$ = $1;
+}
 | expression_statement
+{
+    $$ = $1;
+}
 | selection_statement
+{
+    $$ = $1;
+}
 | iteration_statement
+{
+    $$ = $1;
+}
 | jump_statement
+{
+    $$ = $1;
+}
 ;
 
 compound_statement
 : '{' '}'
+{
+    $$ = new code_container();
+    $$->code << "{\n}\n";
+}
 | '{' statement_list '}'
+{
+    $$ = new code_container();
+    $$->code << "{\n" << $2->code.str() << "}\n";
+}
 | '{' declaration_list statement_list '}'
+{
+    $$ = new code_container();
+    $$->code << "{\n";
+
+    add_identifier($$);
+
+    $$->code << $2->code.str() << $3->code.str() << "}\n";
+}
 | '{' declaration_list '}'
+{
+    $$ = new code_container();
+    $$->code << "{\n" << $2->code.str() << "}\n";
+}
 ;
 
 declaration_list
 : declaration
+{
+    $$ = $1;
+}
 | declaration_list declaration
+{
+    $$ = $1;
+    $$->code << $2->code.str();
+
+    delete $2;
+    $2 = NULL;
+}
 ;
 
 statement_list
 : statement
+{
+    $$ = $1;
+}
 | statement_list statement
+{
+    $$ = $1;
+    $$->code << $2->code.str();
+
+    delete $2;
+    $2 = NULL;
+}
 ;
 
 expression_statement
 : ';'
+{
+    $$ = new code_container();
+}
 | expression ';'
 {
-    code << $1->code.str();
+    $$ = new code_container();
+    $$->code << $1->code.str();
+
     delete $1;
     $1 = NULL;
 }
@@ -641,7 +793,27 @@ iteration_statement
 
 jump_statement
 : RETURN ';'
+{
+    $$ = new code_container();
+    $$->code << "ret void\n";
+}
 | RETURN expression ';'
+{
+    $$ = new code_container();
+    $$->code << $2->code.str() << "ret ";
+    switch ($2->getT()) {
+        case _INT:
+            $$->code << "i32 %x" << $2->getVar();
+            break;
+        case _DOUBLE:
+            $$->code << "double %x" << $2->getVar();
+            break;
+        default:
+            cout << "ERROR\n";
+            break;
+    }
+    $$->code << "\n";
+}
 ;
 
 program
@@ -655,7 +827,55 @@ external_declaration
 ;
 
 function_definition
-: type_name declarator compound_statement
+/* : type_name declarator compound_statement */
+: type_name IDENTIFIER '(' parameter_list ')' compound_statement
+{
+    code << "define ";
+    switch ($1) {
+        case _INT:
+            code << "i32 ";
+            break;
+        case _DOUBLE:
+            code << "double ";
+            break;
+        case _VOID:
+            code << "void ";
+            break;
+        default:
+            cout << "ERROR 1\n";
+            break;
+    }
+    code << "@" << $2 << " (" << $4->code.str() << ")\n" << $6->code.str();
+
+
+    delete $4;
+    $4 = NULL;
+    delete $6;
+    $6 = NULL;
+}
+| type_name IDENTIFIER '(' ')' compound_statement
+{
+    code << "define ";
+    switch ($1) {
+        case _INT:
+            code << "i32 ";
+            break;
+        case _DOUBLE:
+            code << "double ";
+            break;
+        case _VOID:
+            code << "void ";
+            break;
+        default:
+            cout << "ERROR 1\n";
+            break;
+    }
+    code << "@" << $2 << " ( )\n" << $5->code.str();
+
+
+    delete $5;
+    $5 = NULL;
+}
 ;
 
 %%
@@ -714,9 +934,13 @@ int main (int argc, char *argv[]) {
 
     free(file_name);
 
-    /*BOOST_FOREACH(map_boost::value_type i, test_hash) {
-        std::cout<<i.first<<","<<i.second.test<<","<<i.second.t<<"\n";
-    }*/
+    BOOST_FOREACH(map_boost::value_type i, test_hash) {
+        std::cout<<i.first<<":"<<i.second.test<<","<<i.second.t<<','<<i.second.name<<"\n";
+    }
+
+    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it){
+        cout << (*it).register_no << ',' << (*it).t << ',' << (*it).name << endl;
+    }
 
     return 0;
 }
