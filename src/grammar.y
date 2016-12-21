@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "utilityFunctions.hpp"
+#include "expression.hpp"
 
 using namespace std;
 
@@ -40,17 +41,6 @@ map_boost global_hash_table;
 stringstream code;
 vector<identifier> to_store;
 
-char *double_to_hex_str(double d) {
-    char *s = NULL;
-    union {
-        double a;
-        long long int b;
-    } u;
-    u.a = d;
-    asprintf(&s, "%#08llx", u.b);
-    return s;
-}
-
 %}
 
 %define parse.error verbose
@@ -67,7 +57,7 @@ char *double_to_hex_str(double d) {
 %token TYPE_NAME
 %token INT DOUBLE VOID
 %token IF ELSE DO WHILE RETURN FOR
-%type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression
+%type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression logical_neg_expression
 %type <decla> declarator declarator_list
 %type <st> type_name
 %type <ao> assignment_operator
@@ -86,62 +76,29 @@ char *double_to_hex_str(double d) {
 }
 %%
 
-conditional_expression
-: logical_or_expression
-{
-    $$ = $1;
-}
-;
-
-logical_or_expression
-: logical_and_expression
-{
-    $$ = $1;
-}
-| logical_or_expression OR logical_and_expression
-;
-
-logical_and_expression
-: comparison_expression
-{
-    $$ = $1;
-}
-| logical_and_expression AND comparison_expression
-;
-
-
-shift_expression
-: additive_expression
-{
-    $$ = $1;
-}
-| shift_expression SHL additive_expression
-| shift_expression SHR additive_expression
-;
-
 primary_expression
 : IDENTIFIER
 {
-    $$ = load_identifier($1, global_hash_table);
+    $$ = new expression($1, global_hash_table);
     free($1); $1 = NULL;
 }
 | CONSTANTI    
 {
-    $$ = new expression(_INT, new_var());
-    $$->code << "%x" << $$->getVar() << " = add i32 0, " << $1 << "\n";
+    $$ = new expression($1, global_hash_table);
 }
 | CONSTANTD
 {
-    $$ = new expression(_DOUBLE, new_var());
-    char *nb_double = double_to_hex_str($1);
-    $$->code << "%x" << $$->getVar() << " = fadd double 0x000000000000000, " << nb_double << "\n";
-    free(nb_double);
+    $$ = new expression($1, global_hash_table);
 }
 | '(' expression ')'
 {
     $$ = $2;
 }
 | IDENTIFIER '(' ')' //appel de fonction
+{
+    cout << "call" << endl;
+    $$ = new expression($1, global_hash_table);
+}
 | IDENTIFIER '(' argument_expression_list ')' //appel de fonction
 ;
 
@@ -150,35 +107,53 @@ postfix_expression
 {
     $$ = $1;
 }
-| postfix_expression INC_OP
+| IDENTIFIER INC_OP
+// simplification de : postfix_expression INC_OP
 {
-    if ($1->getT() == _INT) {
-        $$ = new expression(_INT, new_var());
-        $$->code << $1->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $1->getVar() << ", 1\n";
+    struct expression *e1 = new expression($1, global_hash_table);
+    struct expression *e2;
+    switch (e1->getT()) {
+    case _INT:
+        e2 = new expression(1, global_hash_table);
+        break;
+
+    case _DOUBLE:
+        e2 = new expression(1.0, global_hash_table);
+        break;
+
+    default:
+        e2 = new expression(_ERROR, -1, global_hash_table);
+        break;
     }
-    else if ($1->getT() == _DOUBLE) {
-        $$ = new expression(_INT, new_var());
-        char *nb_double = double_to_hex_str(1.0);
-        $$->code << $1->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $1->getVar() << ", " << nb_double << "\n";
-        free(nb_double);
-    }
-    delete $1;
-    $1 = NULL;
+    struct expression *e3 = (*e1 + *e2);
+    $$ = (*e3 = $1);
+    $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
+    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
+    free($1); $1 = NULL;
 }
-| postfix_expression DEC_OP
+| IDENTIFIER DEC_OP
+// simplification de postfix_expression DEC_OP
 {
-    if ($1->getT() == _INT) {
-        $$ = new expression(_INT, new_var());
-        $$->code << $1->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $1->getVar() << ", 1\n";
+    struct expression *e1 = new expression($1, global_hash_table);
+    struct expression *e2;
+    switch (e1->getT()) {
+    case _INT:
+        e2 = new expression(1, global_hash_table);
+        break;
+
+    case _DOUBLE:
+        e2 = new expression(1.0, global_hash_table);
+        break;
+
+    default:
+        e2 = new expression(_ERROR, -1, global_hash_table);
+        break;
     }
-    else if ($1->getT() == _DOUBLE) {
-        $$ = new expression(_INT, new_var());
-        char *nb_double = double_to_hex_str(1.0);
-        $$->code << $1->code.str() << "%x" << $$->getVar() << " = fsub double %x" << $1->getVar() << ", " << nb_double << "\n";
-        free(nb_double);
-    }
-    delete $1;
-    $1 = NULL;
+    struct expression *e3 = (*e1 - *e2);
+    $$ = (*e3 = $1);
+    $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
+    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
+    free($1); $1 = NULL;
 }
 ;
 
@@ -192,54 +167,73 @@ unary_expression
 {
     $$ = $1;
 }
-| INC_OP unary_expression
+| INC_OP IDENTIFIER
+// simplification de : INC_OP unary_expression
 {
-    if ($2->getT() == _INT) {
-        $$ = new expression(_INT, new_var());
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = add i32 %x" << $2->getVar() << ", 1\n";
+    struct expression *e1 = new expression($2, global_hash_table);
+    struct expression *e2;
+    switch (e1->getT()) {
+    case _INT:
+        e2 = new expression(1, global_hash_table);
+        break;
+
+    case _DOUBLE:
+        e2 = new expression(1.0, global_hash_table);
+        break;
+
+    default:
+        e2 = new expression(_ERROR, -1, global_hash_table);
+        break;
     }
-    else if ($2->getT() == _DOUBLE) {
-        $$ = new expression(_INT, new_var());
-        char *nb_double = double_to_hex_str(1.0);
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fadd double %x" << $2->getVar() << ", " << nb_double << "\n";
-        free(nb_double);
-    }
-    delete $2;
-    $2 = NULL;
+    struct expression *e3 = (*e1 + *e2);
+    $$ = (*e3 = $2);
+    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
+    free($2); $2 = NULL;
 }
-| DEC_OP unary_expression
+| DEC_OP IDENTIFIER
+// simplification de : DEC_OP unary_expression
 {
-    if ($2->getT() == _INT) {
-        $$ = new expression(_INT, new_var());
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = sub i32 %x" << $2->getVar() << ", 1\n";
+    struct expression *e1 = new expression($2, global_hash_table);
+    struct expression *e2;
+    switch (e1->getT()) {
+    case _INT:
+        e2 = new expression(1, global_hash_table);
+        break;
+
+    case _DOUBLE:
+        e2 = new expression(1.0, global_hash_table);
+        break;
+
+    default:
+        e2 = new expression(_ERROR, -1, global_hash_table);
+        break;
     }
-    else if ($2->getT() == _DOUBLE) {
-        $$ = new expression(_INT, new_var());
-        char *nb_double = double_to_hex_str(1.0);
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fsub double %x" << $2->getVar() << ", " << nb_double << "\n";
-        free(nb_double);
-    }
-    delete $2;
-    $2 = NULL;
+    struct expression *e3 = (*e1 - *e2);
+    $$ = (*e3 = $2);
+    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
+    free($2); $2 = NULL;
 }
 | '-' unary_expression
 {
-    if ($2->getT() == _INT) {
-        $$ = new expression(_INT, new_var());
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = sub i32 0, %x" << $2->getVar() << "\n";
+    struct expression *e1;
+    switch ($2->getT()) {
+    case _INT:
+        e1 = new expression(0, global_hash_table);
+        break;
+
+    case _DOUBLE:
+        e1 = new expression(0.0, global_hash_table);
+        break;
+
+    default:
+        e1 = new expression(_ERROR, -1, global_hash_table);
+        cerr << "expression type is not valid" << endl;
+        break;
     }
-    else if ($2->getT() == _DOUBLE) {
-        $$ = new expression(_DOUBLE, new_var());
-        $$->code << $2->code.str() << "%x" << $$->getVar() << " = fsub double 0x000000000000000, %x" << $2->getVar() << "\n";
-    }
-    delete $2;
-    $2 = NULL;
+    $$ = (*e1 - *$2);
+    delete e1; e1 = NULL; delete $2; $2 = NULL;
 }
 ;
-
-/*unary_operator
-: '-'
-;*/
 
 multiplicative_expression
 : unary_expression
@@ -248,17 +242,17 @@ multiplicative_expression
 }
 | multiplicative_expression '*' unary_expression
 {
-    $$ = expression_multiplication($1, $3);
+    $$ = *$1 * *$3;
     delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | multiplicative_expression '/' unary_expression
 {
-    $$ = expression_quotient($1, $3);
+    $$ = *$1 / *$3;
     delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | multiplicative_expression REM unary_expression
 {
-    $$ = expression_reste($1, $3);
+    $$ = *$1 % *$3;
     delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 ;
@@ -270,12 +264,29 @@ additive_expression
 }
 | additive_expression '+' multiplicative_expression
 {
-    $$ = expression_addition($1, $3);
+    $$ = *$1 + *$3;
     delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 | additive_expression '-' multiplicative_expression
 {
-    $$ = expression_soustraction($1, $3);
+    $$ = *$1 - *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
+;
+
+shift_expression
+: additive_expression
+{
+    $$ = $1;
+}
+| shift_expression SHL additive_expression
+{
+    $$ = *$1 << *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
+| shift_expression SHR additive_expression
+{
+    $$ = *$1 >> *$3;
     delete $1; $1 = NULL; delete $3; $3 = NULL;
 }
 ;
@@ -286,11 +297,78 @@ comparison_expression
     $$ = $1;
 }
 | comparison_expression '<' shift_expression
+{
+    $$ = *$1 < *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
 | comparison_expression '>' shift_expression
+{
+    $$ = *$1 > *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
 | comparison_expression LE_OP shift_expression
+{
+    $$ = *$1 <= *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
 | comparison_expression GE_OP shift_expression
+{
+    $$ = *$1 >= *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
 | comparison_expression EQ_OP shift_expression
+{
+    $$ = *$1 == *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
 | comparison_expression NE_OP shift_expression
+{
+    $$ = *$1 != *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
+;
+
+logical_neg_expression
+: comparison_expression
+{
+    $$ = $1;
+}
+| '!' comparison_expression
+{
+    $$ = !*$2;
+    delete $2; $2 = NULL;
+}
+;
+
+logical_and_expression
+: logical_neg_expression
+{
+    $$ = $1;
+}
+| logical_and_expression AND comparison_expression
+{
+    $$ = *$1 && *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
+;
+
+logical_or_expression
+: logical_and_expression
+{
+    $$ = $1;
+}
+| logical_or_expression OR logical_and_expression
+{
+    $$ = *$1 || *$3;
+    delete $1; $1 = NULL; delete $3; $3 = NULL;
+}
+;
+
+conditional_expression
+: logical_or_expression
+{
+    $$ = $1;
+}
 ;
 
 expression
@@ -300,57 +378,40 @@ expression
     switch ($2) {
 
         case _EQ_ASSIGN:
-            $$ = assign_equal($3, $1, global_hash_table);
+            $$ = (*$3 = $1);
             break;
 
         case _ADD_ASSIGN:
-            {
-                struct expression *e1 = load_identifier($1, global_hash_table);
-                struct expression *e2 = expression_addition(e1, $3);
-                $$ = assign_equal(e2, $1, global_hash_table);
-                delete e1; e1 = NULL; delete e2; e2 = NULL;
-            }
+            $$ = (*$3 += $1);
             break;
 
         case _SUB_ASSIGN:
-            {
-                struct expression *e1 = load_identifier($1, global_hash_table);
-                struct expression *e2 = expression_soustraction(e1, $3);
-                $$ = assign_equal(e2, $1, global_hash_table);
-                delete e1; e1 = NULL; delete e2; e2 = NULL;
-            }
+            $$ = (*$3 -= $1);
             break;
 
         case _MUL_ASSIGN:
-            {
-                struct expression *e1 = load_identifier($1, global_hash_table);
-                struct expression *e2 = expression_multiplication(e1, $3);
-                $$ = assign_equal(e2, $1, global_hash_table);
-                delete e1; e1 = NULL; delete e2; e2 = NULL;
-            }
+            $$ = (*$3 *= $1);
             break;
 
         case _DIV_ASSIGN:
-            {
-                struct expression *e1 = load_identifier($1, global_hash_table);
-                struct expression *e2 = expression_quotient(e1, $3);
-                $$ = assign_equal(e2, $1, global_hash_table);
-                delete e1; e1 = NULL; delete e2; e2 = NULL;
-            }
+            $$ = (*$3 /= $1);
             break;
 
         case _REM_ASSIGN:
-            {
-                struct expression *e1 = load_identifier($1, global_hash_table);
-                struct expression *e2 = expression_reste(e1, $3);
-                $$ = assign_equal(e2, $1, global_hash_table);
-                delete e1; e1 = NULL; delete e2; e2 = NULL;
-            }
+            $$ = (*$3 %= $1);
+            break;
+
+        case _SHL_ASSIGN:
+            $$ = (*$3 <<= $1);
+            break;
+
+        case _SHR_ASSIGN:
+            $$ = (*$3 >>= $1);
             break;
 
         default:
-            cout << "ERROR\n";
-            $$ = new expression(_VOID, -1);
+            $$ = new expression(_ERROR, -1, global_hash_table);
+            cerr << "Wrong assignment type" << endl;
             break;
     }
 
@@ -718,6 +779,11 @@ function_definition
     }
     code << "@" << $2 << " (" << $4->code.str() << ")\n" << $6->code.str() << "\n";
 
+    // add function name to the hash table
+    struct identifier id;
+    id.t = $1;
+    id.name = $2;
+    global_hash_table[$2] = id;
 
     delete $4;
     $4 = NULL;
@@ -745,6 +811,11 @@ function_definition
     }
     code << "@" << $2 << " ()\n" << $5->code.str() << "\n";
 
+    // add function name to the hash table
+    struct identifier id;
+    id.t = $1;
+    id.name = $2;
+    global_hash_table[$2] = id;
 
     delete $5;
     $5 = NULL;

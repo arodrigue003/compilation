@@ -5,7 +5,9 @@ enum simple_type
 {
 	_DOUBLE,
 	_INT,
-	_VOID
+	_VOID,
+	_BOOL,
+	_ERROR
 };
 
 enum assignment_op

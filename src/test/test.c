@@ -42,13 +42,13 @@ void add_double_int()
 	return 0;
 }*/
 
+int b(){
+}
 
 int main()
 {
-	int a;
-	a = 0;
-	a += 2.0;
-	return a;
+	!(!(4 < 5) && 1 == 2);
+	return 0;
 }
 
 /*void add_double_int()

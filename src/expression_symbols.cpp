@@ -3,18 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-expression::expression(simple_type t, int var) : t(t), var(var) {}
 
-simple_type expression::getT() const {
-    return t;
-}
-
-int expression::getVar() const {
-    return var;
-}
-
-expression::~expression() {
-}
 
 
 void declarator::add(char *name){
@@ -48,3 +37,4 @@ std::vector<string>::iterator declarator::begin() {
 std::vector<string>::iterator declarator::end(){
 	return names.end();
 }
+

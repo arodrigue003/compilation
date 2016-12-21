@@ -8,6 +8,9 @@
 #include <sstream>
 #include <vector>
 
+#include <boost/unordered_map.hpp>
+typedef boost::unordered_map<std::string, struct identifier> map_boost;
+
 #include "enum.h"
 
 using namespace std;
@@ -15,24 +18,6 @@ using namespace std;
 struct code_container
 {
 	stringstream code;
-};
-
-
-struct expression : public code_container
-{
-private:
-    enum simple_type t;
-    int var;
-
-public:
-	char *old;
-	char *indentifier;
-
-    expression(simple_type t, int var);
-    virtual ~expression();
-
-    simple_type getT() const;
-    int getVar() const;
 };
 
 struct declarator
