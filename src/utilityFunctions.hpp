@@ -7,7 +7,7 @@
 int new_var();
 int new_label();
 
-void add_identifier(vector<identifier> to_store, struct code_container * cc);
+void add_identifier(vector<identifier> to_store, stringstream &ss);
 
 char *double_to_hex_str(double d);
 

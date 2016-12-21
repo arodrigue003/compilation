@@ -925,6 +925,7 @@ struct expression *operator!(const struct expression & e1) {
 		cerr << "Wrong type for the expression" << endl;
 		ret = new expression(_ERROR, -1, e1.hash_table);
 		break;
+
 	}
 
 	return ret;

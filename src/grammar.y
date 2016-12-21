@@ -15,6 +15,7 @@
 #include <vector>
 #include "utilityFunctions.hpp"
 #include "expression.hpp"
+#include "statement.hpp"
 
 using namespace std;
 
@@ -463,7 +464,6 @@ declaration
 {
     $$ = new code_container();
     struct identifier id;
-    static int i = 0;
     for (std::vector<string>::iterator it = $2->begin(); it != $2->end(); ++it){
         switch ($1) {
             case _INT:
@@ -477,7 +477,6 @@ declaration
                 break;
         }
 
-        id.test = i++;
         id.t = $1;
         id.name = *it;
         global_hash_table[*it] = id;
@@ -611,20 +610,13 @@ compound_statement
 : '{' '}'
 {
     $$ = new code_container();
-    $$->code << "{\n";
 
-    add_identifier(to_store, $$);
-
-    $$->code << "}\n";
 }
 | '{' statement_list '}'
 {
     $$ = new code_container();
-    $$->code << "{\n";
 
-    add_identifier(to_store, $$);
-
-    $$->code << $2->code.str() << "}\n";
+    $$->code << $2->code.str();
 
     delete $2;
     $2 = NULL;
@@ -632,11 +624,8 @@ compound_statement
 | '{' declaration_list statement_list '}'
 {
     $$ = new code_container();
-    $$->code << "{\n";
 
-    add_identifier(to_store, $$);
-
-    $$->code << $2->code.str() << $3->code.str() << "}\n";
+    $$->code << $2->code.str() << $3->code.str();
 
     delete $2;
     $2 = NULL;
@@ -646,11 +635,8 @@ compound_statement
 | '{' declaration_list '}'
 {
     $$ = new code_container();
-    $$->code << "{\n";
 
-    add_identifier(to_store, $$);
-
-    $$->code << $2->code.str() << "}\n";
+    $$->code << $2->code.str();
 
     delete $2;
     $2 = NULL;
@@ -704,20 +690,58 @@ expression_statement
 
 selection_statement
 : IF '(' expression ')' statement
+{
+    $$ = if_statement(*$3, *$5);
+    delete $3; $3 = NULL; delete $5; $5 = NULL;
+}
 | IF '(' expression ')' statement ELSE statement
+{
+    $$ = if_else_statement(*$3, *$5, *$7);
+    delete $3; $3 = NULL; delete $5; $5 = NULL; delete $7; $7 = NULL;
+}
 | FOR '(' expression ';' expression ';' expression ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '(' expression ';' expression ';'            ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '(' expression ';'            ';' expression ')' statement
+{
+$$ = new code_container();
+}
 | FOR '(' expression ';'            ';'            ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '('            ';' expression ';' expression ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '('            ';' expression ';'            ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '('            ';'            ';' expression ')' statement
+{
+    $$ = new code_container();
+}
 | FOR '('            ';'            ';'            ')' statement
+{
+    $$ = new code_container();
+}
 ;
 
 iteration_statement
 : WHILE '(' expression ')' statement
+{
+    $$ = new code_container();
+}
 | DO  statement  WHILE '(' expression ')'
+{
+    $$ = new code_container();
+}
 ;
 
 jump_statement
@@ -777,12 +801,15 @@ function_definition
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " (" << $4->code.str() << ")\n" << $6->code.str() << "\n";
+    code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
+    add_identifier(to_store, code);
+    code << $6->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
     id.name = $2;
+    id.register_no = -1;
     global_hash_table[$2] = id;
 
     delete $4;
@@ -809,12 +836,15 @@ function_definition
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " ()\n" << $5->code.str() << "\n";
+    code << "@" << $2 << " ()\n"  << "{\n";
+    add_identifier(to_store, code);;
+    code << $5->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
     id.name = $2;
+    id.register_no = -1;
     global_hash_table[$2] = id;
 
     delete $5;
@@ -871,7 +901,7 @@ int main (int argc, char *argv[]) {
     fclose(input);
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
-        std::cout<<i.first<<":"<<i.second.test<<","<<i.second.t<<','<<i.second.name<<"\n";
+        std::cout<<i.first<<":"<<i.second.t<<','<<i.second.name<<"\n";
     }
 
     for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it){

@@ -45,10 +45,18 @@ void add_double_int()
 int b(){
 }
 
-int main()
+int main(int x)
 {
-	!(!(4 < 5) && 1 == 2);
-	return 0;
+  int ret;
+  ret = 0;
+
+  if (x > 1) {
+	ret = 1;
+  } else {
+	ret = 2;
+  }
+
+  return ret;
 }
 
 /*void add_double_int()
