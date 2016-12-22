@@ -42,22 +42,14 @@ void add_double_int()
 	return 0;
 }*/
 
-int b(){
+int main(){
+	int i;
+	i=0;
+	while(i<5)
+		i++;
+	return i;
 }
 
-int main(int x)
-{
-  int ret;
-  ret = 0;
-
-  if (x > 1) {
-	ret = 1;
-  } else {
-	ret = 2;
-  }
-
-  return ret;
-}
 
 /*void add_double_int()
 {

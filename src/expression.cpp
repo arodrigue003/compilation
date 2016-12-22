@@ -372,7 +372,7 @@ struct expression *expression::operator+=(char *s) {
 	struct expression *e2 = *e1 + *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -383,7 +383,7 @@ struct expression *expression::operator-=(char *s) {
 	struct expression *e2 = *e1 - *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -394,7 +394,7 @@ struct expression *expression::operator*=(char *s) {
 	struct expression *e2 = *e1 * *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -405,7 +405,7 @@ struct expression *expression::operator/=(char *s) {
 	struct expression *e2 = *e1 / *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -416,7 +416,7 @@ struct expression *expression::operator%=(char *s) {
 	struct expression *e2 = *e1 % *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -427,7 +427,7 @@ struct expression *expression::operator<<=(char *s) {
 	struct expression *e2 = *e1 << *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 
@@ -438,7 +438,7 @@ struct expression *expression::operator>>=(char *s) {
 	struct expression *e2 = *e1 >> *this;
 	ret = (*e2 = s);
 
-	delete e1; e1 = NULL; delete e2; e2 = NULL;
+	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
 	return ret;
 }
 

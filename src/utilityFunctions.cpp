@@ -15,7 +15,7 @@ int new_label() {
 }
 
 char *double_to_hex_str(double d) {
-	char *s = NULL;
+	char *s = nullptr;
 	union {
 		double a;
 		long long int b;

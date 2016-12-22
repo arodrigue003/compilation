@@ -81,7 +81,7 @@ primary_expression
 : IDENTIFIER
 {
     $$ = new expression($1, global_hash_table);
-    free($1); $1 = NULL;
+    free($1); $1 = nullptr;
 }
 | CONSTANTI    
 {
@@ -129,8 +129,8 @@ postfix_expression
     struct expression *e3 = (*e1 + *e2);
     $$ = (*e3 = $1);
     $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
-    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
-    free($1); $1 = NULL;
+    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    free($1); $1 = nullptr;
 }
 | IDENTIFIER DEC_OP
 // simplification de postfix_expression DEC_OP
@@ -153,8 +153,8 @@ postfix_expression
     struct expression *e3 = (*e1 - *e2);
     $$ = (*e3 = $1);
     $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
-    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
-    free($1); $1 = NULL;
+    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    free($1); $1 = nullptr;
 }
 ;
 
@@ -188,8 +188,8 @@ unary_expression
     }
     struct expression *e3 = (*e1 + *e2);
     $$ = (*e3 = $2);
-    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
-    free($2); $2 = NULL;
+    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    free($2); $2 = nullptr;
 }
 | DEC_OP IDENTIFIER
 // simplification de : DEC_OP unary_expression
@@ -211,8 +211,8 @@ unary_expression
     }
     struct expression *e3 = (*e1 - *e2);
     $$ = (*e3 = $2);
-    delete e1; e1 = NULL; delete e2, e2 = NULL; delete e3; e3 = NULL;
-    free($2); $2 = NULL;
+    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    free($2); $2 = nullptr;
 }
 | '-' unary_expression
 {
@@ -232,7 +232,7 @@ unary_expression
         break;
     }
     $$ = (*e1 - *$2);
-    delete e1; e1 = NULL; delete $2; $2 = NULL;
+    delete e1; e1 = nullptr; delete $2; $2 = nullptr;
 }
 ;
 
@@ -244,17 +244,17 @@ multiplicative_expression
 | multiplicative_expression '*' unary_expression
 {
     $$ = *$1 * *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | multiplicative_expression '/' unary_expression
 {
     $$ = *$1 / *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | multiplicative_expression REM unary_expression
 {
     $$ = *$1 % *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -266,12 +266,12 @@ additive_expression
 | additive_expression '+' multiplicative_expression
 {
     $$ = *$1 + *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | additive_expression '-' multiplicative_expression
 {
     $$ = *$1 - *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -283,12 +283,12 @@ shift_expression
 | shift_expression SHL additive_expression
 {
     $$ = *$1 << *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | shift_expression SHR additive_expression
 {
     $$ = *$1 >> *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -300,32 +300,32 @@ comparison_expression
 | comparison_expression '<' shift_expression
 {
     $$ = *$1 < *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | comparison_expression '>' shift_expression
 {
     $$ = *$1 > *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | comparison_expression LE_OP shift_expression
 {
     $$ = *$1 <= *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | comparison_expression GE_OP shift_expression
 {
     $$ = *$1 >= *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | comparison_expression EQ_OP shift_expression
 {
     $$ = *$1 == *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 | comparison_expression NE_OP shift_expression
 {
     $$ = *$1 != *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -337,7 +337,7 @@ logical_neg_expression
 | '!' comparison_expression
 {
     $$ = !*$2;
-    delete $2; $2 = NULL;
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -349,7 +349,7 @@ logical_and_expression
 | logical_and_expression AND comparison_expression
 {
     $$ = *$1 && *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -361,7 +361,7 @@ logical_or_expression
 | logical_or_expression OR logical_and_expression
 {
     $$ = *$1 || *$3;
-    delete $1; $1 = NULL; delete $3; $3 = NULL;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
@@ -416,7 +416,7 @@ expression
             break;
     }
 
-    delete $3; $3 = NULL; free($1); $1 = NULL;
+    delete $3; $3 = nullptr; free($1); $1 = nullptr;
 }
 | conditional_expression
 {
@@ -483,7 +483,7 @@ declaration
     }
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -498,7 +498,7 @@ declarator_list
     $$->merge($3);
 
     delete $3;
-    $3 = NULL;
+    $3 = nullptr;
 }
 ;
 
@@ -524,7 +524,7 @@ declarator
     $$->add($1);
 
     free($1);
-    $1 = NULL;
+    $1 = nullptr;
 }
 | '(' declarator ')'
 /*| declarator '(' parameter_list ')'
@@ -549,7 +549,7 @@ parameter_list
     $$->code << ", " << $3->code.str();
 
     delete $3;
-    $3 = NULL;
+    $3 = nullptr;
 }
 ;
 
@@ -579,7 +579,7 @@ parameter_declaration
 
     global_hash_table[$2] = id;
     free($2);
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -619,7 +619,7 @@ compound_statement
     $$->code << $2->code.str();
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 | '{' declaration_list statement_list '}'
 {
@@ -628,9 +628,9 @@ compound_statement
     $$->code << $2->code.str() << $3->code.str();
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
     delete $3;
-    $3 = NULL;
+    $3 = nullptr;
 }
 | '{' declaration_list '}'
 {
@@ -639,7 +639,7 @@ compound_statement
     $$->code << $2->code.str();
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -654,7 +654,7 @@ declaration_list
     $$->code << $2->code.str();
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -669,7 +669,7 @@ statement_list
     $$->code << $2->code.str();
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -684,63 +684,75 @@ expression_statement
     $$->code << $1->code.str();
 
     delete $1;
-    $1 = NULL;
+    $1 = nullptr;
 }
 ;
 
 selection_statement
 : IF '(' expression ')' statement
 {
-    $$ = if_statement(*$3, *$5);
-    delete $3; $3 = NULL; delete $5; $5 = NULL;
+    $$ = if_then_else(*$3, *$5);
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
 }
 | IF '(' expression ')' statement ELSE statement
 {
-    $$ = if_else_statement(*$3, *$5, *$7);
-    delete $3; $3 = NULL; delete $5; $5 = NULL; delete $7; $7 = NULL;
+    $$ = if_then_else(*$3, *$5, *$7);
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $7; $7 = nullptr;
 }
 | FOR '(' expression ';' expression ';' expression ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(*$3, *$5, *$7, *$9);
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
+    delete $7; $7 = nullptr; delete $9; $9 = nullptr;
+
 }
 | FOR '(' expression ';' expression ';'            ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(*$3, *$5, nullptr, *$8);
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $8; $8 = nullptr;
 }
 | FOR '(' expression ';'            ';' expression ')' statement
 {
-$$ = new code_container();
+    $$ = for_then(*$3, nullptr, *$6, *$8);
+    delete $3; $3 = nullptr; delete $6; $6 = nullptr; delete $8; $8 = nullptr;
 }
 | FOR '(' expression ';'            ';'            ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(*$3, nullptr, nullptr, *$7);
+    delete $3; $3 = nullptr; delete $7; $7 = nullptr;
 }
 | FOR '('            ';' expression ';' expression ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(nullptr, *$4, *$6, *$8);
+    delete $4; $4 = nullptr; delete $6; $6 = nullptr; delete $8; $8 = nullptr;
 }
 | FOR '('            ';' expression ';'            ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(nullptr, *$4, nullptr, *$7);
+    delete $4; $4 = nullptr; delete $7; $7 = nullptr;
 }
 | FOR '('            ';'            ';' expression ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(nullptr, nullptr, *$5, *$7);
+    delete $5; $5 = nullptr; delete $7; $7 = nullptr;
 }
 | FOR '('            ';'            ';'            ')' statement
 {
-    $$ = new code_container();
+    $$ = for_then(nullptr, nullptr, nullptr, *$6);
+    delete $6; $6 = nullptr;
 }
 ;
 
 iteration_statement
 : WHILE '(' expression ')' statement
 {
-    $$ = new code_container();
+    $$ = while_then(*$3, *$5);
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
 }
 | DO  statement  WHILE '(' expression ')'
 {
-    $$ = new code_container();
+    $$ = do_while(*$2, *$5);
+    delete $2; $2 = nullptr; delete $5; $5 = nullptr;
 }
 ;
 
@@ -768,7 +780,7 @@ jump_statement
     $$->code << "\n";
 
     delete $2;
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -813,11 +825,11 @@ function_definition
     global_hash_table[$2] = id;
 
     delete $4;
-    $4 = NULL;
+    $4 = nullptr;
     delete $6;
-    $6 = NULL;
+    $6 = nullptr;
     free($2);
-    $2 = NULL;
+    $2 = nullptr;
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
@@ -848,9 +860,9 @@ function_definition
     global_hash_table[$2] = id;
 
     delete $5;
-    $5 = NULL;
+    $5 = nullptr;
     free($2);
-    $2 = NULL;
+    $2 = nullptr;
 }
 ;
 
@@ -861,7 +873,7 @@ function_definition
 extern int yylineno;
 extern int yydebug;
 
-char *file_name = NULL;
+char *file_name = nullptr;
 extern char yytext[];
 extern int column;
 extern int yylineno;
@@ -877,7 +889,7 @@ int yyerror (const char *s) {
 
 int main (int argc, char *argv[]) {
 
-    FILE *input = NULL;
+    FILE *input = nullptr;
     if (argc==2) {
         input = fopen(argv[1], "r");
 	file_name = strdup (argv[1]);
