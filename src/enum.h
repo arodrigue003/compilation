@@ -22,4 +22,10 @@ enum assignment_op
 	_SUB_ASSIGN
 };
 
+enum identifier_type
+{
+	_FUNCTION,
+	_VAR
+};
+
 #endif // ENUM_H

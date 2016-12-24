@@ -14,7 +14,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_subdirectory(src)
 
-# Use Astar to reformat source files
+# Use Astyle to reformat source files
 add_custom_target(format
         COMMAND astyle -RA2fpHUxC90xLyjxek1W1 \"src/*.cpp\" \"src/*.hpp\"
         COMMAND rm -Rf src/*.orig

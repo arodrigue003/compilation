@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
-#include "expression_symbols.hpp"
-#include "enum.h"
 #include <boost/unordered_map.hpp>
 #include <boost/foreach.hpp>
 #include <string>
@@ -40,7 +38,6 @@ map_boost global_hash_table;
 
 //utility functions
 stringstream code;
-vector<identifier> to_store;
 
 %}
 
@@ -59,21 +56,20 @@ vector<identifier> to_store;
 %token INT DOUBLE VOID
 %token IF ELSE DO WHILE RETURN FOR
 %type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression logical_neg_expression
-%type <decla> declarator declarator_list
+%type <decla> declarator declarator_list parameter_list parameter_declaration
 %type <st> type_name
 %type <ao> assignment_operator
-%type <c> parameter_list parameter_declaration function_definition
-%type <c> expression_statement declaration declaration_list compound_statement statement_list statement jump_statement iteration_statement selection_statement
+%type <c> expression_statement declaration declaration_list compound_statement statement_list statement jump_statement iteration_statement selection_statement function_definition
 %start program
 %union {
   char *string_c;
   int n;
   double d;
   struct expression *s;
-  struct declarator *decla;
   enum simple_type st;
   enum assignment_op ao;
   struct code_container *c;
+  struct declaration_list *decla;
 }
 %%
 
@@ -464,13 +460,13 @@ declaration
 {
     $$ = new code_container();
     struct identifier id;
-    for (std::vector<string>::iterator it = $2->begin(); it != $2->end(); ++it){
+    BOOST_FOREACH(identifier id_old, $2->idList) {
         switch ($1) {
             case _INT:
-                $$->code << "%" << *it << " = alloca i32\n";
+                $$->code << "%" << id_old.name << " = alloca i32\n";
                 break;
             case _DOUBLE:
-                $$->code << "%" << *it << " = alloca double\n";
+                $$->code << "%" << id_old.name << " = alloca double\n";
                 break;
             default:
                 cout << "ERROR\n";
@@ -478,8 +474,9 @@ declaration
         }
 
         id.t = $1;
-        id.name = *it;
-        global_hash_table[*it] = id;
+        id.name = id_old.name;
+        id.symbolType = _VAR;
+        global_hash_table[id_old.name] = id;
     }
 
     delete $2;
@@ -495,10 +492,9 @@ declarator_list
 | declarator_list ',' declarator
 {
     $$ = $1;
-    $$->merge($3);
+    $$->idList.insert($$->idList.end(), $3->idList.begin(), $3->idList.end());
 
-    delete $3;
-    $3 = nullptr;
+    delete $3; $3 = nullptr;
 }
 ;
 
@@ -520,11 +516,14 @@ type_name
 declarator
 : IDENTIFIER
 {
-    $$ = new declarator();
-    $$->add($1);
+    $$ = new declaration_list();
 
-    free($1);
-    $1 = nullptr;
+    struct identifier id;
+    id.name = $1;
+
+    $$->idList.push_back(id);
+
+    free($1); $1 = nullptr;
 }
 | '(' declarator ')'
 /*| declarator '(' parameter_list ')'
@@ -547,6 +546,7 @@ parameter_list
 {
     $$ = $1;
     $$->code << ", " << $3->code.str();
+    $$->idList.insert($$->idList.end(), $3->idList.begin(), $3->idList.end());
 
     delete $3;
     $3 = nullptr;
@@ -558,7 +558,7 @@ parameter_declaration
 // simplification de type_name declarator
 {
     int var = new_var();
-    $$ = new code_container();
+    $$ = new declaration_list();
     switch ($1) {
         case _INT:
             $$->code << "i32 %x" << var;
@@ -567,19 +567,19 @@ parameter_declaration
             $$->code << "double %x" << var;
             break;
         default:
-            cout << "ERROR\n";
+            cout << "ERROR" << endl;
             break;
     }
-    struct identifier id;
 
+    struct identifier id;
     id.t = $1;
     id.name = $2;
     id.register_no = var;
-    to_store.push_back(id);
+    id.symbolType = _VAR;
+    $$->idList.push_back(id);
 
-    global_hash_table[$2] = id;
-    free($2);
-    $2 = nullptr;
+    global_hash_table[$2] = id; //add variable to the global hash table variable
+    free($2); $2 = nullptr;
 }
 ;
 
@@ -814,22 +814,20 @@ function_definition
             break;
     }
     code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
-    add_identifier(to_store, code);
+    add_identifier($4->idList, code);
     code << $6->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
     id.name = $2;
-    id.register_no = -1;
+    id.symbolType = _FUNCTION;
+    BOOST_FOREACH(identifier id_old, $4->idList) {
+        id.paramTypes.push_back(id_old.t);
+    }
     global_hash_table[$2] = id;
 
-    delete $4;
-    $4 = nullptr;
-    delete $6;
-    $6 = nullptr;
-    free($2);
-    $2 = nullptr;
+    delete $4; $4 = nullptr; delete $6; $6 = nullptr; free($2); $2 = nullptr;
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
@@ -849,20 +847,16 @@ function_definition
             break;
     }
     code << "@" << $2 << " ()\n"  << "{\n";
-    add_identifier(to_store, code);;
     code << $5->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
     id.name = $2;
-    id.register_no = -1;
+    id.symbolType = _FUNCTION;
     global_hash_table[$2] = id;
 
-    delete $5;
-    $5 = nullptr;
-    free($2);
-    $2 = nullptr;
+    delete $5; $5 = nullptr; free($2); $2 = nullptr;
 }
 ;
 
@@ -913,11 +907,13 @@ int main (int argc, char *argv[]) {
     fclose(input);
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
-        std::cout<<i.first<<":"<<i.second.t<<','<<i.second.name<<"\n";
-    }
-
-    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it){
-        cout << (*it).register_no << ',' << (*it).t << ',' << (*it).name << endl;
+        if (i.second.symbolType == _VAR)
+            cout<<"VAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
+        else if (i.second.symbolType == _FUNCTION) {
+            cout<<"FUN : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
+            BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                cout << "  - " << st << endl;
+        }
     }
 
     return 0;
