@@ -2,16 +2,15 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif //_GNU_SOURCE
-#define DEBUG
+
+#define DEBUG //yack ?
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
-#include <boost/unordered_map.hpp>
-#include <boost/foreach.hpp>
 #include <string>
 #include <vector>
-#include "utilityFunctions.hpp"
+
 #include "expression.hpp"
 #include "statement.hpp"
 
@@ -20,6 +19,9 @@ using namespace std;
 // headers definition to permit compilation
 extern int yylineno;
 int yyerror(const char *s);
+char *file_name = nullptr;
+extern int column;
+extern int yylineno;
 
 extern "C"
 {
@@ -32,6 +34,7 @@ extern "C"
 }
 
 int indentation_lvl = 0;
+bool has_error = false;
 
 //Hash map
 map_boost global_hash_table;
@@ -55,12 +58,16 @@ stringstream code;
 %token TYPE_NAME
 %token INT DOUBLE VOID
 %token IF ELSE DO WHILE RETURN FOR
-%type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression argument_expression_list unary_expression multiplicative_expression additive_expression comparison_expression expression logical_neg_expression
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
+%type <s> conditional_expression logical_or_expression logical_and_expression shift_expression primary_expression postfix_expression unary_expression multiplicative_expression additive_expression comparison_expression expression logical_neg_expression
 %type <decla> declarator declarator_list parameter_list parameter_declaration
 %type <st> type_name
 %type <ao> assignment_operator
 %type <c> expression_statement declaration declaration_list compound_statement statement_list statement jump_statement iteration_statement selection_statement function_definition
-%start program
+%type <c> global_declaration program external_declaration
+%type <ael> argument_expression_list
+%start program_entry
 %union {
   char *string_c;
   int n;
@@ -70,6 +77,7 @@ stringstream code;
   enum assignment_op ao;
   struct code_container *c;
   struct declaration_list *decla;
+  struct arg_expr_list *ael;
 }
 %%
 
@@ -93,10 +101,14 @@ primary_expression
 }
 | IDENTIFIER '(' ')' //appel de fonction
 {
-    cout << "call" << endl;
-    $$ = new expression($1, global_hash_table);
+    $$ = new expression($1, nullptr, global_hash_table);
+    free($1); $1 = nullptr;
 }
 | IDENTIFIER '(' argument_expression_list ')' //appel de fonction
+{
+    $$ = new expression($1, *$3, global_hash_table);
+    free($1); $1 = nullptr; delete $3; $3 = nullptr;
+}
 ;
 
 postfix_expression
@@ -156,7 +168,15 @@ postfix_expression
 
 argument_expression_list
 : expression
+{
+    $$ = new arg_expr_list();
+    $$->codeV.push_back($1);
+}
 | argument_expression_list ',' expression
+{
+    $$ = $1;
+    $$->codeV.push_back($3);
+}
 ;
 
 unary_expression
@@ -474,8 +494,37 @@ declaration
         }
 
         id.t = $1;
-        id.name = id_old.name;
-        id.symbolType = _VAR;
+        id.name = "%" + id_old.name;
+        id.symbolType = _LOCAL_VAR;
+        global_hash_table[id_old.name] = id;
+    }
+
+    delete $2;
+    $2 = nullptr;
+}
+;
+
+global_declaration
+: type_name declarator_list ';'
+{
+    $$ = new code_container();
+    struct identifier id;
+    BOOST_FOREACH(identifier id_old, $2->idList) {
+        switch ($1) {
+            case _INT:
+                $$->code << "@" << id_old.name << " = common global i32 0\n";
+                break;
+            case _DOUBLE:
+                $$->code << "@" << id_old.name << " = common global double 0x000000000000000\n";
+                break;
+            default:
+                cout << "ERROR\n";
+                break;
+        }
+
+        id.t = $1;
+        id.name = "@" + id_old.name;
+        id.symbolType = _GLOBAL_VAR;
         global_hash_table[id_old.name] = id;
     }
 
@@ -525,7 +574,7 @@ declarator
 
     free($1); $1 = nullptr;
 }
-| '(' declarator ')'
+//| '(' declarator ')'
 /*| declarator '(' parameter_list ')'
 {
     cout << $3->code.str() << endl;
@@ -573,9 +622,10 @@ parameter_declaration
 
     struct identifier id;
     id.t = $1;
-    id.name = $2;
+    string temp = $2;
+    id.name = "%" + temp;
     id.register_no = var;
-    id.symbolType = _VAR;
+    id.symbolType = _LOCAL_VAR;
     $$->idList.push_back(id);
 
     global_hash_table[$2] = id; //add variable to the global hash table variable
@@ -658,6 +708,7 @@ declaration_list
 }
 ;
 
+
 statement_list
 : statement
 {
@@ -689,13 +740,13 @@ expression_statement
 ;
 
 selection_statement
-: IF '(' expression ')' statement
+: IF '(' expression ')' statement %prec LOWER_THAN_ELSE
 {
     $$ = if_then_else(*$3, *$5);
     delete $3; $3 = nullptr; delete $5; $5 = nullptr;
 }
 | IF '(' expression ')' statement ELSE statement
-{
+{;
     $$ = if_then_else(*$3, *$5, *$7);
     delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $7; $7 = nullptr;
 }
@@ -784,43 +835,67 @@ jump_statement
 }
 ;
 
+program_entry
+: program
+{
+    cout << $1->code.str();
+    delete $1;
+}
+;
+
 program
 : external_declaration
+{
+    $$ = $1;
+}
 | program external_declaration
+{
+    $$ = $1;
+    $1->code << $2->code.str();
+    delete $2; $2 = nullptr;
+}
 ;
 
 external_declaration
 : function_definition
-| declaration
+{
+    $$ = $1;
+}
+| global_declaration
+{
+    $$ = $1;
+}
 ;
 
 function_definition
 /* : type_name declarator compound_statement */
 : type_name IDENTIFIER '(' parameter_list ')' compound_statement
 {
-    code << "define ";
+    $$ = new code_container();
+    $$->code << "define ";
     switch ($1) {
         case _INT:
-            code << "i32 ";
+            $$->code << "i32 ";
             break;
         case _DOUBLE:
-            code << "double ";
+            $$->code << "double ";
             break;
         case _VOID:
-            code << "void ";
+            $$->code << "void ";
             break;
         default:
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
-    add_identifier($4->idList, code);
-    code << $6->code.str() << "}\n" << "\n";
+    $$->code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
+    add_identifier($4->idList, $$->code);
+    $$->code << $6->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
-    id.name = $2;
+    string temp = $2;
+    id.name = "@" + temp;
     id.symbolType = _FUNCTION;
     BOOST_FOREACH(identifier id_old, $4->idList) {
         id.paramTypes.push_back(id_old.t);
@@ -831,28 +906,30 @@ function_definition
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
-    code << "define ";
+    $$ = new code_container();
+    $$->code << "define ";
     switch ($1) {
         case _INT:
-            code << "i32 ";
+            $$->code << "i32 ";
             break;
         case _DOUBLE:
-            code << "double ";
+            $$->code << "double ";
             break;
         case _VOID:
-            code << "void ";
+            $$->code << "void ";
             break;
         default:
             cout << "ERROR 1\n";
             break;
     }
-    code << "@" << $2 << " ()\n"  << "{\n";
-    code << $5->code.str() << "}\n" << "\n";
+    $$->code << "@" << $2 << " ()\n"  << "{\n";
+    $$->code << $5->code.str() << "}\n" << "\n";
 
     // add function name to the hash table
     struct identifier id;
     id.t = $1;
-    id.name = $2;
+    string temp = $2;
+    id.name = "@" + temp;
     id.symbolType = _FUNCTION;
     global_hash_table[$2] = id;
 
@@ -867,10 +944,8 @@ function_definition
 extern int yylineno;
 extern int yydebug;
 
-char *file_name = nullptr;
+
 extern char yytext[];
-extern int column;
-extern int yylineno;
 extern FILE *yyin;
 
 
@@ -901,16 +976,18 @@ int main (int argc, char *argv[]) {
     }
 
     yyparse();
-    cout << code.str();
+
 
     free(file_name);
     fclose(input);
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
-        if (i.second.symbolType == _VAR)
-            cout<<"VAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
+        if (i.second.symbolType == _LOCAL_VAR)
+            cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
+        else if (i.second.symbolType == _GLOBAL_VAR)
+            cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
         else if (i.second.symbolType == _FUNCTION) {
-            cout<<"FUN : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
+            cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
             BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
                 cout << "  - " << st << endl;
         }

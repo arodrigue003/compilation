@@ -25,7 +25,8 @@ enum assignment_op
 enum identifier_type
 {
 	_FUNCTION,
-	_VAR
+	_LOCAL_VAR,
+	_GLOBAL_VAR
 };
 
 #endif // ENUM_H

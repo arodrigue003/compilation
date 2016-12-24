@@ -26,16 +26,16 @@ char* double_to_hex_str(double d) {
 }
 
 void add_identifier(vector<identifier> to_store, stringstream& ss) {
-	for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it) {
-		struct identifier id;
+    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it) {
+        struct identifier id;
 
         switch ((*it).t) {
         case _INT:
-            ss << "%" << (*it).name << " = alloca i32\n";
+			ss << (*it).name << " = alloca i32\n";
             break;
 
         case _DOUBLE:
-            ss << "%" << (*it).name << " = alloca double\n";
+			ss << (*it).name << " = alloca double\n";
             break;
 
         default:
@@ -45,11 +45,11 @@ void add_identifier(vector<identifier> to_store, stringstream& ss) {
 
         switch ((*it).t) {
         case _INT:
-            ss << "store i32 %x" << (*it).register_no << ", i32* %" << (*it).name << "\n";
+			ss << "store i32 %x" << (*it).register_no << ", i32* " << (*it).name << "\n";
             break;
 
         case _DOUBLE:
-            ss << "store double %x" << (*it).register_no << ", double* %" << (*it).name << "\n";
+			ss << "store double %x" << (*it).register_no << ", double* " << (*it).name << "\n";
             break;
 
         default:
