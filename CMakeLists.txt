@@ -16,7 +16,7 @@ add_subdirectory(src)
 
 # Use Astyle to reformat source files
 add_custom_target(format
-        COMMAND astyle -RA2fpHUxC120xLyjxek1W1 \"src/*.cpp\" \"src/*.hpp\"
+        COMMAND astyle -RA2fpHUxC200xLyjxek1W1 \"src/*.cpp\" \"src/*.hpp\"
         COMMAND rm -Rf src/*.orig
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )

@@ -29,4 +29,10 @@ enum identifier_type
 	_GLOBAL_VAR
 };
 
+enum error_type
+{
+	_WARNING_COMPIL,
+	_ERROR_COMPIL
+};
+
 #endif // ENUM_H

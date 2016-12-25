@@ -82,7 +82,7 @@ void count() {
 		if (yytext[i] == '\n')
 			column = 0;
 		else if (yytext[i] == '\t')
-			column += 8 - (column % 8);
+			column += 4 - (column % 4);
 		else
 			column++;
 	}

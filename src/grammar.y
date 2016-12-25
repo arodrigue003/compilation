@@ -975,6 +975,8 @@ int main (int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    setup_p5(global_hash_table);
+
     yyparse();
 
 

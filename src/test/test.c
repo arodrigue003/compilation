@@ -1,79 +1,59 @@
-/*double w, h;
-double bail_out;
-double zoom_factor, zoom;
+double w;
+double h;
+double angle;
+int angle_dir;
+int N;
 
+// Appelé une fois au début depuis sketch.js
 void my_setup()
 {
   w = 640;
   h = 480;
-  bail_out = 2.0;
-  zoom_factor = 1.4;
-  zoom = (w * 0.25296875);
+  angle = 0;
+  angle_dir = 0;
+  N = 200;
+
   // Définit la taille de la zone d'affichage
   createCanvas(w, h);
-
+  return;
 }
 
+// Appelé à chaque frame depuis sketch.js
 void my_draw()
 {
-  int x,y,n;
-  int maxiter;
-  double zr,zi,cr,ci;
-  double centerr;
-  double centeri;
-  double m;
-  double a;
-  double b;
-  double color;
+  int i;
+  double r;
 
-  maxiter = (w/2) * 0.049715909 * log10(zoom);
-  centerr = -0.800671;
-  centeri = 0.158392;
+  // Fond noir
+  background(0);
 
-  for  (y = 0; y < h; y++)  {
-	for (x = 0; x < w; x++) {
-	  m=0;
-	  // Get the complex poing on gauss space to be calculate
-	  cr=centerr + (x - (w/2))/zoom;
-	  zr=cr;
-	  ci=centeri + (y - (h/2))/zoom;
-	  zi=ci;
-	  // Applies the actual mandelbrot formula on that point
-	  for (n = 0; n <= maxiter && m < bail_out * bail_out; n ++) {
-	a=zr*zr-zi*zi+cr;
-	b=2*zr*zi+ci;
-	zr=a;
-	zi=b;
-	m=a*a+b*b;
-	  }
+  // Affichage des cercles
+  for(i = 0; i < N; i++)
+  {
+	// Remplissage des cercles en niveaux de gris
+	fill(255.0 * i / N);
 
-	  // Paint the pixel calculated depending on the number
-	  // of iterations found
-	  if (n<maxiter)
-	   color= n / maxiter * 255;
-	  else color=0;
+	// Contour des cercles en niveaux de gris
+	stroke(255.0 * (N - i) / N);
 
-	  stroke(color);
-	  point(x, y);
-	}
+	r = i + angle;
+
+	// Dessin du cercle
+	ellipse(w / 2.0 + i * sin(r), h / 2.0 + i * cos(r), i * angle, i * angle);
   }
 
-  zoom *= zoom_factor;
-}
-*/
-
-double lol(){
-	return 1.0;
-}
-
-int caca(double f, int y){
-	int ret;
-	ret = f + y;
-	return ret;
-}
-
-int main(){
-	int i;
-	i = caca(5, i+42);
-	return i;
+  // Animation qui boucle :
+  if(angle_dir == 0)
+  {
+	  angle += 0.01;
+	  if(angle > 2)
+	  angle_dir = 1;
+  }
+  else if(angle_dir == 1)
+  {
+	  angle -= 0.01;
+	  if(angle < -2)
+	  angle_dir = 0;
+  }
+  return;
 }

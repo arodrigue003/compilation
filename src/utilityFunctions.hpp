@@ -12,6 +12,8 @@ using namespace std;
 #include <boost/unordered_map.hpp>
 typedef boost::unordered_map<std::string, struct identifier> map_boost;
 
+extern bool has_error;
+
 #include "enum.h"
 
 int yyerror(const char *s);
@@ -46,5 +48,12 @@ char* double_to_hex_str(double d);
 
 // Identifier gestion
 struct expression* load_identifier(char* s, map_boost hash);
+
+//Error function
+int error_funct (enum error_type et, string s);
+int error_funct(enum error_type et, string s1, string s2);
+
+//Function to add p5 functions to the hash table in order to recognize them
+void setup_p5(map_boost &hash);
 
 #endif // UTILITYFUNCTIONS_HPP

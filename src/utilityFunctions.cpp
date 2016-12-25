@@ -60,3 +60,88 @@ void add_identifier(vector<identifier> to_store, stringstream& ss) {
 
     to_store.clear();
 }
+
+
+extern char *file_name;
+extern int column;
+extern int yylineno;
+
+int error_funct (enum error_type et, string s) {
+	cerr << file_name << ":" << yylineno << ":" << column << ": ";
+	switch (et) {
+
+	case _WARNING_COMPIL:
+		cerr << "warning: ";
+		break;
+
+	case _ERROR_COMPIL:
+		cerr << "error: ";
+		break;
+	}
+	cerr << s << endl;
+	has_error = true;
+	return 0;
+}
+
+int error_funct(enum error_type et, string s1, string s2) {
+	cerr << file_name << ":" << yylineno << ":" << column << ": ";
+	switch (et) {
+
+	case _WARNING_COMPIL:
+		cerr << "warning: ";
+		break;
+
+	case _ERROR_COMPIL:
+		cerr << "error: ";
+		break;
+	}
+	cerr << s1 << s2 << endl;
+	has_error = true;
+	return 0;
+}
+
+//Function to add p5 functions to the hash table in order to recognize them
+void setup_p5(map_boost &hash) {
+	// mathematicals functions
+	struct identifier math;
+	math.name = "@log10";
+	math.symbolType = _FUNCTION;
+	math.t = _DOUBLE;
+	math.paramTypes.push_back(_DOUBLE);
+	hash["log10"] = math;
+
+	math.name = "@cos";
+	hash["cos"] = math;
+
+	math.name = "@sin";
+	hash["sin"] = math;
+
+	math.name = "@sqrt";
+	hash["sqrt"] = math;
+
+	math.t = _VOID;
+	math.name = "@fill";
+	hash["fill"] = math;
+
+	math.name = "@background";
+	hash["background"] = math;
+
+	math.name = "@stroke";
+	hash["stroke"] = math;
+
+	math.paramTypes.push_back(_DOUBLE);
+	math.name = "@createCanvas";
+	hash["createCanvas"] = math;
+
+	math.name = "@point";
+	hash["point"] = math;
+
+	math.paramTypes.push_back(_DOUBLE);
+	math.paramTypes.push_back(_DOUBLE);
+	math.name = "@line";
+	hash["line"] = math;
+
+	math.name = "@ellipse";
+	hash["ellipse"] = math;
+
+}

@@ -31,7 +31,12 @@ public:
 	// Settes
 	void setVar(int var);
 
-	// Code generation for assignments
+	// Code factorisation for the generation of binaries operators
+	friend struct expression* binary_operator(const struct expression& e1, const struct expression& e2,
+											  string integer_op, string double_op,
+											  enum simple_type integer_res, enum simple_type double_res);
+
+	// Code generation for binary operators
 	friend struct expression* operator+(const struct expression& e1, const struct expression& e2);
 	friend struct expression* operator-(const struct expression& e1, const struct expression& e2);
 	friend struct expression* operator*(const struct expression& e1, const struct expression& e2);
