@@ -28,14 +28,23 @@ struct identifier {
     string name;
     int register_no;
     enum identifier_type symbolType;
+	bool from_q5 = false;
+	bool used = false;
 
     vector<enum simple_type> paramTypes; //used for functions identification
 };
 
 struct declaration_list : public code_container {
     vector<identifier> idList;
+
+public:
+	declaration_list(enum simple_type t, string name, map_boost &hash_table);
+	declaration_list() : code_container(){}
 };
 
+struct type_list {
+	vector<enum simple_type> list;
+};
 
 
 // registers and labels counters

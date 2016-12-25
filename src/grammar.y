@@ -65,8 +65,9 @@ stringstream code;
 %type <st> type_name
 %type <ao> assignment_operator
 %type <c> expression_statement declaration declaration_list compound_statement statement_list statement jump_statement iteration_statement selection_statement function_definition
-%type <c> global_declaration program external_declaration
+%type <c> global_declaration program external_declaration function_declaration
 %type <ael> argument_expression_list
+%type <tl> type_list
 %start program_entry
 %union {
   char *string_c;
@@ -78,6 +79,7 @@ stringstream code;
   struct code_container *c;
   struct declaration_list *decla;
   struct arg_expr_list *ael;
+  struct type_list *tl;
 }
 %%
 
@@ -119,49 +121,13 @@ postfix_expression
 | IDENTIFIER INC_OP
 // simplification de : postfix_expression INC_OP
 {
-    struct expression *e1 = new expression($1, global_hash_table);
-    struct expression *e2;
-    switch (e1->getT()) {
-    case _INT:
-        e2 = new expression(1, global_hash_table);
-        break;
-
-    case _DOUBLE:
-        e2 = new expression(1.0, global_hash_table);
-        break;
-
-    default:
-        e2 = new expression(_ERROR, -1, global_hash_table);
-        break;
-    }
-    struct expression *e3 = (*e1 + *e2);
-    $$ = (*e3 = $1);
-    $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
-    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    $$ = incr_postfix($1, global_hash_table);
     free($1); $1 = nullptr;
 }
 | IDENTIFIER DEC_OP
 // simplification de postfix_expression DEC_OP
 {
-    struct expression *e1 = new expression($1, global_hash_table);
-    struct expression *e2;
-    switch (e1->getT()) {
-    case _INT:
-        e2 = new expression(1, global_hash_table);
-        break;
-
-    case _DOUBLE:
-        e2 = new expression(1.0, global_hash_table);
-        break;
-
-    default:
-        e2 = new expression(_ERROR, -1, global_hash_table);
-        break;
-    }
-    struct expression *e3 = (*e1 - *e2);
-    $$ = (*e3 = $1);
-    $$->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
-    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    $$ = decr_postfix($1, global_hash_table);
     free($1); $1 = nullptr;
 }
 ;
@@ -187,68 +153,19 @@ unary_expression
 | INC_OP IDENTIFIER
 // simplification de : INC_OP unary_expression
 {
-    struct expression *e1 = new expression($2, global_hash_table);
-    struct expression *e2;
-    switch (e1->getT()) {
-    case _INT:
-        e2 = new expression(1, global_hash_table);
-        break;
-
-    case _DOUBLE:
-        e2 = new expression(1.0, global_hash_table);
-        break;
-
-    default:
-        e2 = new expression(_ERROR, -1, global_hash_table);
-        break;
-    }
-    struct expression *e3 = (*e1 + *e2);
-    $$ = (*e3 = $2);
-    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    $$ = incr_prefix($2, global_hash_table);
     free($2); $2 = nullptr;
 }
 | DEC_OP IDENTIFIER
 // simplification de : DEC_OP unary_expression
 {
-    struct expression *e1 = new expression($2, global_hash_table);
-    struct expression *e2;
-    switch (e1->getT()) {
-    case _INT:
-        e2 = new expression(1, global_hash_table);
-        break;
-
-    case _DOUBLE:
-        e2 = new expression(1.0, global_hash_table);
-        break;
-
-    default:
-        e2 = new expression(_ERROR, -1, global_hash_table);
-        break;
-    }
-    struct expression *e3 = (*e1 - *e2);
-    $$ = (*e3 = $2);
-    delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+    $$ = decr_prefix($2, global_hash_table);
     free($2); $2 = nullptr;
 }
 | '-' unary_expression
 {
-    struct expression *e1;
-    switch ($2->getT()) {
-    case _INT:
-        e1 = new expression(0, global_hash_table);
-        break;
-
-    case _DOUBLE:
-        e1 = new expression(0.0, global_hash_table);
-        break;
-
-    default:
-        e1 = new expression(_ERROR, -1, global_hash_table);
-        cerr << "expression type is not valid" << endl;
-        break;
-    }
-    $$ = (*e1 - *$2);
-    delete e1; e1 = nullptr; delete $2; $2 = nullptr;
+    $$ = opposite(*$2);
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -574,16 +491,6 @@ declarator
 
     free($1); $1 = nullptr;
 }
-//| '(' declarator ')'
-/*| declarator '(' parameter_list ')'
-{
-    cout << $3->code.str() << endl;
-    $$ = new declarator();
-}
-| declarator '(' ')'
-{
-    cout << "NO PARAMETER" << endl;
-}*/
 ;
 
 parameter_list
@@ -597,8 +504,7 @@ parameter_list
     $$->code << ", " << $3->code.str();
     $$->idList.insert($$->idList.end(), $3->idList.begin(), $3->idList.end());
 
-    delete $3;
-    $3 = nullptr;
+    delete $3; $3 = nullptr;
 }
 ;
 
@@ -606,29 +512,7 @@ parameter_declaration
 : type_name IDENTIFIER
 // simplification de type_name declarator
 {
-    int var = new_var();
-    $$ = new declaration_list();
-    switch ($1) {
-        case _INT:
-            $$->code << "i32 %x" << var;
-            break;
-        case _DOUBLE:
-            $$->code << "double %x" << var;
-            break;
-        default:
-            cout << "ERROR" << endl;
-            break;
-    }
-
-    struct identifier id;
-    id.t = $1;
-    string temp = $2;
-    id.name = "%" + temp;
-    id.register_no = var;
-    id.symbolType = _LOCAL_VAR;
-    $$->idList.push_back(id);
-
-    global_hash_table[$2] = id; //add variable to the global hash table variable
+    $$ = new declaration_list($1, $2, global_hash_table);
     free($2); $2 = nullptr;
 }
 ;
@@ -660,36 +544,24 @@ compound_statement
 : '{' '}'
 {
     $$ = new code_container();
-
 }
 | '{' statement_list '}'
 {
     $$ = new code_container();
-
     $$->code << $2->code.str();
-
-    delete $2;
-    $2 = nullptr;
+    delete $2; $2 = nullptr;
 }
 | '{' declaration_list statement_list '}'
 {
     $$ = new code_container();
-
     $$->code << $2->code.str() << $3->code.str();
-
-    delete $2;
-    $2 = nullptr;
-    delete $3;
-    $3 = nullptr;
+    delete $2; $2 = nullptr; delete $3; $3 = nullptr;
 }
 | '{' declaration_list '}'
 {
     $$ = new code_container();
-
     $$->code << $2->code.str();
-
-    delete $2;
-    $2 = nullptr;
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -718,9 +590,7 @@ statement_list
 {
     $$ = $1;
     $$->code << $2->code.str();
-
-    delete $2;
-    $2 = nullptr;
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -733,9 +603,7 @@ expression_statement
 {
     $$ = new code_container();
     $$->code << $1->code.str();
-
-    delete $1;
-    $1 = nullptr;
+    delete $1; $1 = nullptr;
 }
 ;
 
@@ -838,8 +706,11 @@ jump_statement
 program_entry
 : program
 {
+    struct code_container *cc = declare_q5_used_functions(global_hash_table);
+    cout << cc->code.str() << "\n";
+    delete cc; cc = nullptr;
     cout << $1->code.str();
-    delete $1;
+    delete $1; $1 = nullptr;
 }
 ;
 
@@ -864,6 +735,35 @@ external_declaration
 | global_declaration
 {
     $$ = $1;
+}
+| function_declaration
+{
+    $$ = $1;
+}
+;
+
+function_declaration
+: type_name IDENTIFIER '(' type_list ')' ';'
+{
+    $$ = declare_funct($1, $2, *$4, global_hash_table);
+    free($2); $2 = nullptr; delete $4; $4 = nullptr;
+}
+| type_name IDENTIFIER '(' ')' ';'
+{
+    $$ = declare_funct($1, $2, global_hash_table);
+    free($2); $2 = nullptr;
+}
+;
+
+type_list
+: type_name
+{
+    $$ = new type_list();
+    $$->list.push_back($1);
+}
+| type_list ',' type_name
+{
+    $$->list.push_back($3);
 }
 ;
 
@@ -984,14 +884,16 @@ int main (int argc, char *argv[]) {
     fclose(input);
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
-        if (i.second.symbolType == _LOCAL_VAR)
-            cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
-        else if (i.second.symbolType == _GLOBAL_VAR)
-            cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
-        else if (i.second.symbolType == _FUNCTION) {
-            cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<endl;
-            BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
-                cout << "  - " << st << endl;
+        if (i.second.from_q5 == false) {
+            if (i.second.symbolType == _LOCAL_VAR)
+                cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+            else if (i.second.symbolType == _GLOBAL_VAR)
+                cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+            else if (i.second.symbolType == _FUNCTION) {
+                cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                    cout << "  - " << st << endl;
+            }
         }
     }
 

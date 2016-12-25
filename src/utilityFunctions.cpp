@@ -4,6 +4,43 @@
 
 #include "utilityFunctions.hpp"
 
+declaration_list::declaration_list(enum simple_type t, string name, map_boost &hash_table) {
+
+	if (hash_table.find(name) != hash_table.end()) {
+		// We don't let redifinition of an identifier occur
+		error_funct(_ERROR_COMPIL, "Redefinition of identifier ", name);
+		return ;
+	}
+
+	int var = new_var();
+	switch (t) {
+		case _INT:
+			code << "i32 %x" << var;
+			break;
+		case _DOUBLE:
+			code << "double %x" << var;
+			break;
+		default:
+			cout << "ERROR" << endl;
+			break;
+	}
+
+	struct identifier id;
+	id.t = t;
+	id.name = "%" + name;
+	id.register_no = var;
+	id.symbolType = _LOCAL_VAR;
+	idList.push_back(id);
+
+	hash_table[name] = id; //add variable to the global hash table variable
+}
+
+
+
+
+
+
+
 int new_var() {
     static int i = 0;
     return i++;
@@ -104,6 +141,7 @@ int error_funct(enum error_type et, string s1, string s2) {
 void setup_p5(map_boost &hash) {
 	// mathematicals functions
 	struct identifier math;
+	math.from_q5 = true;
 	math.name = "@log10";
 	math.symbolType = _FUNCTION;
 	math.t = _DOUBLE;

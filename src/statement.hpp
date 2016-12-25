@@ -32,4 +32,10 @@ struct code_container* while_then(const struct expression& e1,
 struct code_container* do_while(const struct code_container& s1,
                                 const struct expression& e1);
 
+
+// used for function declaration
+struct code_container* declare_q5_used_functions(map_boost &hash_table);
+struct code_container* declare_funct(enum simple_type t, string name, map_boost &hash_table);
+struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_boost &hash_table);
+
 #endif // STATEMENT_HPP

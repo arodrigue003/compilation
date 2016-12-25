@@ -4,7 +4,7 @@ expression::expression(simple_type t, int var, map_boost& hash) : hash_table(has
 }
 
 // primary expression creation
-expression::expression(char* s, map_boost& hash) : hash_table(hash) {
+expression::expression(string s, map_boost& hash) : hash_table(hash) {
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
@@ -69,7 +69,8 @@ expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) {
 		cerr << "Can't find identifier " << s << endl;
 	}
 	else {
-		struct identifier id = hash.at(s);
+		struct identifier &id = hash.at(s);
+		id.used = true;
 		if (!id.paramTypes.empty()) {
 			t = _ERROR;
 			var = -1;
@@ -102,7 +103,8 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 		cerr << "Can't find identifier " << s << endl;
 	}
 	else {
-		struct identifier id = hash.at(s);
+		struct identifier &id = hash.at(s);
+		id.used = true;
 		if (id.paramTypes.size() != ael.codeV.size()) {
 			t = _ERROR;
 			var = -1;
@@ -127,7 +129,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 						break;
 
 					case _DOUBLE:
-						// In this case expression mut be converted in an int value
+						// In this case expression must be converted in an int value
 						newVar = new_var();
 						code << expression->code.str();
 						code << "%x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
@@ -145,7 +147,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 
 					switch (expression->getT()) {
 					case _INT:
-						// In this case expression mut be converted in an double value
+						// In this case expression must be converted in an double value
 						newVar = new_var();
 						code << expression->code.str();
 						code << "%x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
@@ -169,8 +171,6 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 				}
 
 			}
-
-
 
 			t = id.t;
 			switch (id.t) {
@@ -272,7 +272,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 			ret = new expression(double_res, new_var(), e1.hash_table);
 			ret->code << e1.code.str() << e2.code.str();
 			ret->code << "  %x" << newV << " = sitofp i32 %x" << e1.var << " to double\n";
-			ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e2.var << ", %x" << newV << "\n";
+			ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << newV << ", %x" << e2.var << "\n";
 			break;
 
 		case _VOID:
@@ -492,7 +492,7 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 
 
 // Code generation for assignements
-struct expression* expression::operator=(char* s) {
+struct expression* expression::operator=(string s) {
 	struct expression* ret;
 
 	if (hash_table.find(s) == hash_table.end()) {
@@ -627,7 +627,7 @@ struct expression* expression::operator=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator+=(char* s) {
+struct expression* expression::operator+=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 + *this;
@@ -636,7 +636,7 @@ struct expression* expression::operator+=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator-=(char* s) {
+struct expression* expression::operator-=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 - *this;
@@ -645,7 +645,7 @@ struct expression* expression::operator-=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator*=(char* s) {
+struct expression* expression::operator*=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1** this;
@@ -654,7 +654,7 @@ struct expression* expression::operator*=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator/=(char* s) {
+struct expression* expression::operator/=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 / *this;
@@ -663,7 +663,7 @@ struct expression* expression::operator/=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator%=(char* s) {
+struct expression* expression::operator%=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 % *this;
@@ -672,7 +672,7 @@ struct expression* expression::operator%=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator<<=(char* s) {
+struct expression* expression::operator<<=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 << *this;
@@ -681,7 +681,7 @@ struct expression* expression::operator<<=(char* s) {
 	return ret;
 }
 
-struct expression* expression::operator>>=(char* s) {
+struct expression* expression::operator>>=(string s) {
 	struct expression* ret;
 	struct expression* e1 = new expression(s, hash_table);
 	struct expression* e2 = *e1 >> *this;
@@ -793,5 +793,123 @@ struct expression* operator!(const struct expression& e1) {
 		break;
 	}
 
+	return ret;
+}
+
+
+// unary operators expressions
+struct expression *incr_postfix(string name, map_boost &hash_table) {
+	struct expression *ret;
+	struct expression *e1 = new expression(name, hash_table);
+	struct expression *e2;
+	switch (e1->getT()) {
+	case _INT:
+		e2 = new expression(1, hash_table);
+		break;
+
+	case _DOUBLE:
+		e2 = new expression(1.0, hash_table);
+		break;
+
+	default:
+		e2 = new expression(_ERROR, -1, hash_table);
+		break;
+	}
+	struct expression *e3 = (*e1 + *e2);
+	ret = (*e3 = name);
+	ret->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
+	delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+	return ret;
+}
+
+struct expression *decr_postfix(string name, map_boost &hash_table) {
+	struct expression *ret;
+	struct expression *e1 = new expression(name, hash_table);
+	struct expression *e2;
+	switch (e1->getT()) {
+	case _INT:
+		e2 = new expression(1, hash_table);
+		break;
+
+	case _DOUBLE:
+		e2 = new expression(1.0, hash_table);
+		break;
+
+	default:
+		e2 = new expression(_ERROR, -1, hash_table);
+		break;
+	}
+	struct expression *e3 = (*e1 - *e2);
+	ret = (*e3 = name);
+	ret->setVar(e1->getVar()); //Expression result is the identifier value before the unary operator
+	delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+	return ret;
+}
+
+struct expression *incr_prefix(string name, map_boost &hash_table) {
+	struct expression *ret;
+	struct expression *e1 = new expression(name, hash_table);
+	struct expression *e2;
+	switch (e1->getT()) {
+	case _INT:
+		e2 = new expression(1, hash_table);
+		break;
+
+	case _DOUBLE:
+		e2 = new expression(1.0, hash_table);
+		break;
+
+	default:
+		e2 = new expression(_ERROR, -1, hash_table);
+		break;
+	}
+	struct expression *e3 = (*e1 + *e2);
+	ret = (*e3 = name);
+	delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+	return ret;
+}
+
+struct expression *decr_prefix(string name, map_boost &hash_table) {
+	struct expression *ret;
+	struct expression *e1 = new expression(name, hash_table);
+	struct expression *e2;
+	switch (e1->getT()) {
+	case _INT:
+		e2 = new expression(1, hash_table);
+		break;
+
+	case _DOUBLE:
+		e2 = new expression(1.0, hash_table);
+		break;
+
+	default:
+		e2 = new expression(_ERROR, -1, hash_table);
+		break;
+	}
+	struct expression *e3 = (*e1 - *e2);
+	ret = (*e3 = name);
+	delete e1; e1 = nullptr; delete e2, e2 = nullptr; delete e3; e3 = nullptr;
+	return ret;
+}
+
+struct expression *opposite(const struct expression &e1){
+	struct expression *ret;
+	struct expression *e2;
+	switch (e1.getT()) {
+	case _INT:
+		e2 = new expression(0, e1.hash_table);
+		break;
+
+	case _DOUBLE:
+		e2 = new expression(0.0, e1.hash_table);
+		break;
+
+	default:
+		e2 = new expression(_ERROR, -1, e1.hash_table);
+		cerr << "expression type is not valid" << endl;
+		break;
+	}
+	ret = (*e2 - e1);
+	delete e2; e2 = nullptr;
 	return ret;
 }
