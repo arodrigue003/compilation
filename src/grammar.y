@@ -282,7 +282,7 @@ logical_and_expression
 | logical_and_expression AND comparison_expression
 {
     $$ = *$1 && *$3;
-    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
+    delete $3; $3 = nullptr;
 }
 ;
 
@@ -547,21 +547,18 @@ compound_statement
 }
 | '{' statement_list '}'
 {
-    $$ = new code_container();
-    $$->code << $2->code.str();
-    delete $2; $2 = nullptr;
+    $$ = $2;
 }
 | '{' declaration_list statement_list '}'
 {
-    $$ = new code_container();
-    $$->code << $2->code.str() << $3->code.str();
-    delete $2; $2 = nullptr; delete $3; $3 = nullptr;
+    $$ = $2;
+    $$->code << $3->code.str();
+    $$->has_return = $3->has_return;
+    delete $3; $3 = nullptr;
 }
 | '{' declaration_list '}'
 {
-    $$ = new code_container();
-    $$->code << $2->code.str();
-    delete $2; $2 = nullptr;
+    $$ = $2;
 }
 ;
 
@@ -589,7 +586,10 @@ statement_list
 | statement_list statement
 {
     $$ = $1;
-    $$->code << $2->code.str();
+    if ($$->has_return == false) {
+        $$->code << $2->code.str();
+        $$->has_return = $2->has_return;
+    }
     delete $2; $2 = nullptr;
 }
 ;
@@ -679,11 +679,13 @@ jump_statement
 : RETURN ';'
 {
     $$ = new code_container();
+    $$->has_return = true;
     $$->code << "ret void\n";
 }
 | RETURN expression ';'
 {
     $$ = new code_container();
+    $$->has_return = true;
     $$->code << $2->code.str() << "ret ";
     switch ($2->getT()) {
         case _INT:
@@ -789,7 +791,14 @@ function_definition
     }
     $$->code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
     add_identifier($4->idList, $$->code);
-    $$->code << $6->code.str() << "}\n" << "\n";
+    $$->code << $6->code.str();
+
+    if ($1 != _VOID && $6->has_return == false)
+        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
+    if ($1 == _VOID && $6->has_return == false)
+        $$->code << "  ret void\n";
+
+    $$->code << "}\n\n";
 
     // add function name to the hash table
     struct identifier id;
@@ -800,7 +809,7 @@ function_definition
     BOOST_FOREACH(identifier id_old, $4->idList) {
         id.paramTypes.push_back(id_old.t);
     }
-    global_hash_table[$2] = id;
+    global_hash_table[$2] = id;        
 
     delete $4; $4 = nullptr; delete $6; $6 = nullptr; free($2); $2 = nullptr;
 }
@@ -823,7 +832,14 @@ function_definition
             break;
     }
     $$->code << "@" << $2 << " ()\n"  << "{\n";
-    $$->code << $5->code.str() << "}\n" << "\n";
+    $$->code << $5->code.str();
+
+    if ($1 != _VOID && $5->has_return == false)
+        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
+    if ($1 == _VOID && $5->has_return == false)
+        $$->code << "  ret void\n";
+
+    $$->code << "}\n\n";
 
     // add function name to the hash table
     struct identifier id;

@@ -30,6 +30,7 @@ public:
 
 	// Settes
 	void setVar(int var);
+	void setT(enum simple_type t);
 
 	// Code factorisation for the generation of binaries operators
 	friend struct expression* binary_operator(const struct expression& e1, const struct expression& e2,
@@ -64,7 +65,7 @@ public:
 	friend struct expression* operator>=(const struct expression& e1, const struct expression& e2);
 
 	// Code generation for logicales operators
-	friend struct expression* operator&&(const struct expression& e1, const struct expression& e2);
+	friend struct expression* operator&&(struct expression& e1, const struct expression& e2);
 	friend struct expression* operator||(const struct expression& e1, const struct expression& e2);
 	friend struct expression* operator!(const struct expression& e1);
 

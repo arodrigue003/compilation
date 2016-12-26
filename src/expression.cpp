@@ -242,6 +242,10 @@ void expression::setVar(int var) {
 	this->var = var;
 }
 
+void expression::setT(enum simple_type t) {
+	this->t = t;
+}
+
 
 expression::~expression() {
 }
@@ -718,22 +722,26 @@ struct expression* operator>=(const struct expression& e1, const struct expressi
 
 
 // Code generation for logicales operators
-struct expression* operator&&(const struct expression& e1, const struct expression& e2) {
+struct expression* operator&&(struct expression& e1, const struct expression& e2) {
 	struct expression* ret;
 
+	int var;
 	switch (e1.t) {
 	case _BOOL:
 		switch (e2.t) {
 		case _BOOL:
-			ret = new expression(_BOOL, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "%x" << ret->getVar() << " = and i1 %x" << e1.var << ", %x" << e2.var <<
+			var = new_var();
+			ret = &e1;//new expression(_BOOL, new_var(), e1.hash_table);
+			ret->code << e2.code.str();
+			ret->code << "%x" << var << " = and i1 %x" << e1.var << ", %x" << e2.var <<
 						 "\n";
+			ret->setVar(var);
+			ret->setT(_BOOL);
 			break;
 
 		default:
 			cerr << "Wrong type for the expression" << endl;
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = &e1; ret->setT(_ERROR); ret->setVar(-1);
 			break;
 		}
 
@@ -741,7 +749,7 @@ struct expression* operator&&(const struct expression& e1, const struct expressi
 
 	default:
 		cerr << "Wrong type for the expression" << endl;
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = &e1; ret->setT(_ERROR); ret->setVar(-1);
 		break;
 	}
 

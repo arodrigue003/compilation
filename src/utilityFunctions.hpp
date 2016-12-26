@@ -21,6 +21,7 @@ int yyerror(const char *s);
 // some struct definitions for yack
 struct code_container {
     stringstream code;
+	bool has_return = false;
 };
 
 struct identifier {
@@ -62,7 +63,6 @@ struct expression* load_identifier(char* s, map_boost hash);
 int error_funct (enum error_type et, string s);
 int error_funct(enum error_type et, string s1, string s2);
 
-//Function to add p5 functions to the hash table in order to recognize them
-void setup_p5(map_boost &hash);
+
 
 #endif // UTILITYFUNCTIONS_HPP

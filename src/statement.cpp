@@ -343,6 +343,55 @@ struct code_container* do_while(const struct code_container& s1,
 	return ret;
 }
 
+
+//Function to add p5 functions to the hash table in order to recognize them
+void setup_p5(map_boost &hash) {
+	// mathematicals functions
+	struct identifier math;
+	math.from_q5 = true;
+	math.name = "@log10";
+	math.symbolType = _FUNCTION;
+	math.t = _DOUBLE;
+	math.paramTypes.push_back(_DOUBLE);
+	hash["log10"] = math;
+
+	math.name = "@cos";
+	hash["cos"] = math;
+
+	math.name = "@sin";
+	hash["sin"] = math;
+
+	math.name = "@sqrt";
+	hash["sqrt"] = math;
+
+	math.t = _VOID;
+	math.name = "@fill";
+	hash["fill"] = math;
+
+	math.name = "@background";
+	hash["background"] = math;
+
+	math.name = "@stroke";
+	hash["stroke"] = math;
+
+	math.paramTypes.push_back(_DOUBLE);
+	math.name = "@createCanvas";
+	hash["createCanvas"] = math;
+
+	math.name = "@point";
+	hash["point"] = math;
+
+	math.paramTypes.push_back(_DOUBLE);
+	math.paramTypes.push_back(_DOUBLE);
+	math.name = "@line";
+	hash["line"] = math;
+
+	math.name = "@ellipse";
+	hash["ellipse"] = math;
+
+}
+
+
 // used for function declaration
 struct code_container* declare_q5_used_functions(map_boost &hash_table) {
 	struct code_container *ret = new code_container();
