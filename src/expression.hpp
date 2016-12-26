@@ -65,7 +65,7 @@ public:
 	friend struct expression* operator>=(const struct expression& e1, const struct expression& e2);
 
 	// Code generation for logicales operators
-	friend struct expression* operator&&(struct expression& e1, const struct expression& e2);
+	friend struct expression* operator&&(const struct expression& e1, const struct expression& e2);
 	friend struct expression* operator||(const struct expression& e1, const struct expression& e2);
 	friend struct expression* operator!(const struct expression& e1);
 

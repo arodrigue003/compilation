@@ -282,7 +282,7 @@ logical_and_expression
 | logical_and_expression AND comparison_expression
 {
     $$ = *$1 && *$3;
-    delete $3; $3 = nullptr;
+    delete $1; $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
 
