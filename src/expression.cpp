@@ -62,33 +62,40 @@ expression::expression(double d, map_boost& hash) : hash_table(hash), t(_DOUBLE)
 
 
 // Function call
-expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) {
+expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) { //without parameter
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
-		cerr << "Can't find identifier " << s << endl;
+		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
 		struct identifier &id = hash.at(s);
-		id.used = true;
-		if (!id.paramTypes.empty()) {
+		if (id.symbolType != _FUNCTION) {
+			// In this case, we try to call something that is not a function
 			t = _ERROR;
 			var = -1;
-			cerr << "Wrong number of arguments for " << s << endl;
+			error_funct(_ERROR_COMPIL, s, " is not a function");
+		} else if (!id.paramTypes.empty()) {
+			t = _ERROR;
+			var = -1;
+			error_funct(_ERROR_COMPIL, "too much arguments to function ", s);
 		}
 		else {
-			t = id.t;
+			id.used = true; //used at the end to determine which of p5 function need to be declared
+			t = id.t; //expression type is the function return type
 			switch (id.t) {
+			// We store result only if the function is a non void return function.
 			case _INT:
 				var = new_var();
-				code << "%x" << var << " = call i32 ";
+				code << "  %x" << var << " = call i32 ";
 				break;
 			case _DOUBLE:
 				var = new_var();
-				code << "%x" << var << " = call double ";
+				code << "  %x" << var << " = call double ";
 				break;
 			default:
-				code << "call void ";
+				var = -1;
+				code << "  call void ";
 				break;
 			}
 			code << id.name << "()\n";
@@ -96,94 +103,134 @@ expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) {
 	}
 }
 
-expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : hash_table(hash) {
+
+expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : hash_table(hash) { //with parameters
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
-		cerr << "Can't find identifier " << s << endl;
+		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
 		struct identifier &id = hash.at(s);
-		id.used = true;
-		if (id.paramTypes.size() != ael.codeV.size()) {
+		if (id.symbolType != _FUNCTION) {
+			// In this case, we try to call something that is not a function
 			t = _ERROR;
 			var = -1;
-			cerr << "Wrong number of arguments for " << s << endl;
+			error_funct(_ERROR_COMPIL, s, " is not a function");
+		}
+		else if (id.paramTypes.size() < ael.codeV.size()) {
+			t = _ERROR;
+			var = -1;
+			error_funct(_ERROR_COMPIL, "too much arguments to function ", s);
+		}
+		else if (id.paramTypes.size() > ael.codeV.size()) {
+			t = _ERROR;
+			var = -1;
+			error_funct(_ERROR_COMPIL, "too few arguments to function ", s);
 		}
 		else {
+
+			id.used = true; //used at the end to determine which of p5 function need to be declared
 
 			int count = 0;
 			enum simple_type param_type;
 			BOOST_FOREACH(struct expression *expression, ael.codeV) {
+				// in this loop we write expression code before function call in order to call it with results of theses expressions
+				// We also change register where expression is stored in order to have the good value on the function call
 
 				param_type = id.paramTypes[count];
 				count++;
-				int newVar = expression->getVar();
+				int newVar;
 
-				switch (param_type) {
-				case _INT:
-					switch (expression->getT()) {
-
-					case _INT:
-						code << expression->code.str();
-						break;
-
-					case _DOUBLE:
-						// In this case expression must be converted in an int value
-						newVar = new_var();
-						code << expression->code.str();
-						code << "%x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
-						expression->setVar(newVar);
-						break;
-
-					default:
-						cerr << "Wrong type for parameter " << count << endl;
-						break;
-					}
-
-					break;
-
-				case _DOUBLE:
-
-					switch (expression->getT()) {
-					case _INT:
-						// In this case expression must be converted in an double value
-						newVar = new_var();
-						code << expression->code.str();
-						code << "%x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
-						expression->setVar(newVar);
-						break;
-
-					case _DOUBLE:
-						code << expression->code.str();
-						break;
-
-					default:
-						cerr << "Wrong type for " << s << endl;
-						break;
-					}
-
-					break;
-
-				default:
-					cout << "ERROR\n";
-					break;
+				// Error gestion : if used in order to avoid repetition in the switch
+				if (param_type == _VOID || expression->getT() == _VOID) {
+					error_funct(_ERROR_COMPIL, "invalid use of void expression");
+					expression->setT(_ERROR);
+					t = _ERROR;
+					var = -1;
 				}
+				else if (param_type == _BOOL || expression->getT() == _BOOL) {
+					error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+					expression->setT(_ERROR);
+					t = _ERROR;
+					var = -1;
+				}
+				else if (param_type == _BOOL || expression->getT() == _BOOL) {
+					// In this case, we consider that the expression has already an error and we don't consider others errors
+					// in order to don't flood the error output with big expressions.
+					expression->setT(_ERROR);
+					t = _ERROR;
+					var = -1;
+				}
+				else {
+					switch (param_type) {
+					case _INT:
+						switch (expression->getT()) {
 
+						case _INT:
+							// No conversion needed, expression has the same type as the function parameter
+							code << expression->code.str();
+							break;
+
+						case _DOUBLE:
+							// Need to convert expression from double to int
+							newVar = new_var();
+							code << expression->code.str();
+							code << "%x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
+							expression->setVar(newVar);
+							break;
+
+						default:
+							expression->setT(_ERROR);
+							break;
+						}
+
+						break;
+
+					case _DOUBLE:
+
+						switch (expression->getT()) {
+						case _INT:
+							// Need to convert expression from int to double
+							newVar = new_var();
+							code << expression->code.str();
+							code << "%x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
+							expression->setVar(newVar);
+							break;
+
+						case _DOUBLE:
+							code << expression->code.str();
+							break;
+
+						default:
+							expression->setT(_ERROR);
+							break;
+						}
+
+						break;
+
+					default:
+						expression->setT(_ERROR);
+						break;
+					}
+				}
 			}
 
-			t = id.t;
+
+			t = id.t; //expression type is the function return type
 			switch (id.t) {
+			// We store result only if the function is a non void return function.
 			case _INT:
 				var = new_var();
-				code << "%x" << var << " = call i32 ";
+				code << "  %x" << var << " = call i32 ";
 				break;
 			case _DOUBLE:
 				var = new_var();
-				code << "%x" << var << " = call double ";
+				code << "  %x" << var << " = call double ";
 				break;
 			default:
-				code << "call void ";
+				var = -1;
+				code << "  call void ";
 				break;
 			}
 			code << id.name << "(";
@@ -191,6 +238,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 			count = 0;
 			int size = ael.codeV.size();
 			BOOST_FOREACH(struct expression *expression, ael.codeV) {
+				// Here we call function with the good values
 
 				param_type = id.paramTypes[count];
 				count++;
@@ -208,12 +256,12 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 					break;
 
 				default:
-					cout << "ERROR" << endl;
+					// Error gestion was done before
 					break;
 
 				}
-				delete expression;
 
+				delete expression; //memory free
 			}
 
 			code << ")\n";
@@ -221,6 +269,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 		}
 	}
 }
+
 
 
 // Getters
@@ -257,123 +306,80 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 	struct expression* ret;
 	int newV;
 
-	switch (e1.t) {
-
-	case _INT:
-		switch (e2.t) {
-
-		case _INT:
-			// No conversion needed, both expression have the same type
-			ret = new expression(integer_res, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "  %x" << ret->getVar() << " = " << integer_op << " i32 %x" << e1.var << ", %x" << e2.var << "\n";
-			break;
-
-		case _DOUBLE:
-			// Need to convert e1 from int to double
-			newV = new_var();
-			ret = new expression(double_res, new_var(), e1.hash_table);
-			ret->code << e1.code.str();
-			ret->code << "  %x" << newV << " = sitofp i32 %x" << e1.var << " to double\n";
-			ret->code << e2.code.str();
-			ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << newV << ", %x" << e2.var << "\n";
-			break;
-
-		case _VOID:
-			error_funct(_ERROR_COMPIL, "void value not ignored as it ought to be");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		case _BOOL:
-			error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		case _ERROR:
-			// In this case, we consider that the expression has already an error and we don't consider others errors
-			// in order to don't flood the error output with big expressions.
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		default:
-			// If you see this something really goes wrong withe the compiler
-			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		}
-		break;
-
-	case _DOUBLE:
-		switch (e2.t) {
-
-		case _INT:
-			// Need to convert e2 from int to double
-			newV = new_var();
-			ret = new expression(double_res, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "  %x" << newV << " = sitofp i32 %x" << e2.var << " to double\n";
-			ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << newV << "\n";
-			break;
-
-		case _DOUBLE:
-			// No conversion needed, both expression have the same type
-			ret = new expression(double_res, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << e2.var << "\n";
-			break;
-
-		case _VOID:
-			error_funct(_ERROR_COMPIL, "void value not ignored as it ought to be");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		case _BOOL:
-			error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		case _ERROR:
-			// In this case, we consider that the expression has already an error and we don't consider others errors
-			// in order to don't flood the error output with big expressions.
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-
-		default:
-			// If you see this something really goes wrong withe the compiler
-			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-			ret = new expression(_ERROR, -1, e1.hash_table);
-			break;
-		}
-		break;
-
-	case _VOID:
-		error_funct(_ERROR_COMPIL, "void value not ignored as it ought to be");
+	// Error gestion : if used in order to avoid repetition in the switch
+	if (e1.t == _VOID || e2.t == _VOID) {
+		error_funct(_ERROR_COMPIL, "invalid use of void expression");
 		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
-	case _BOOL:
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
 		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
-	case _ERROR:
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
 		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
-	default:
-		// If you see this something really goes wrong withe the compiler
-		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
 	}
+	else {
+		switch (e1.t) {
 
+		case _INT:
+			switch (e2.t) {
+
+			case _INT:
+				// No conversion needed, both expression have the same type
+				ret = new expression(integer_res, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "  %x" << ret->getVar() << " = " << integer_op << " i32 %x" << e1.var << ", %x" << e2.var << "\n";
+				break;
+
+			case _DOUBLE:
+				// Need to convert e1 from int to double
+				newV = new_var();
+				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret->code << e1.code.str();
+				ret->code << "  %x" << newV << " = sitofp i32 %x" << e1.var << " to double\n";
+				ret->code << e2.code.str();
+				ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << newV << ", %x" << e2.var << "\n";
+				break;
+
+			default:
+				break;
+
+			}
+			break;
+
+		case _DOUBLE:
+			switch (e2.t) {
+
+			case _INT:
+				// Need to convert e2 from int to double
+				newV = new_var();
+				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "  %x" << newV << " = sitofp i32 %x" << e2.var << " to double\n";
+				ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << newV << "\n";
+				break;
+
+			case _DOUBLE:
+				// No conversion needed, both expression have the same type
+				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << e2.var << "\n";
+				break;
+
+			default:
+				break;
+			}
+			break;
+
+		default:
+			break;
+
+		}
+	}
 	return ret;
 }
-
 
 // Code generation for basics operations between expressions
 struct expression* operator+(const struct expression& e1, const struct expression& e2) {
@@ -399,98 +405,120 @@ struct expression* operator%(const struct expression& e1, const struct expressio
 
 
 struct expression* operator<<(const struct expression& e1, const struct expression& e2) {
-	//TODO : improve this
+	//This operation is only permitted if e1 is an integers.
+	//We allow implicit conversion for e2 from double to int
 	struct expression* ret;
 
-	switch (e1.t) {
-	case _INT:
+	// Error gestion : if used in order to avoid repetition in the switch
+	if (e1.t == _VOID || e2.t == _VOID) {
+		error_funct(_ERROR_COMPIL, "invalid use of void expression");
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
+		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
+		// In this case, we consider that the expression has already an error and we don't consider others errors
+		// in order to don't flood the error output with big expressions.
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else {
 		int conversion;
-
-		switch (e2.t) {
+		switch (e1.t) {
 		case _INT:
-			ret = new expression(_INT, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << e2.var <<
-						 "\n";
+
+			switch (e2.t) {
+
+			case _INT:
+				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << e2.var << "\n";
+				break;
+
+			case _DOUBLE:
+				// In this cas we made an implicit convertion for e2 from double to int
+				conversion = new_var();
+				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
+				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << conversion << "\n";
+				break;
+
+			default:
+				break;
+			}
+
 			break;
 
 		case _DOUBLE:
-			// In this cas we made an implicit convertion for e2 from double to int
-			conversion = new_var();
-			ret = new expression(_INT, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
-			ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << conversion <<
-						 "\n";
+			error_funct(_ERROR_COMPIL, "SHL operation canno't be applied to a double expression");
+			ret = new expression(_ERROR, -1, e1.hash_table);
 			break;
 
 		default:
-			cerr << "Wrong type for the expression";
-			ret = new expression(_ERROR, -1, e1.hash_table);
 			break;
 		}
-
-		break;
-
-	case _DOUBLE:
-		cerr << "SHL operation canno't be applied to a double expression";
-		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
-	default:
-		cerr << "Wrong type for the expression";
-		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
 	}
-
 	return ret;
 }
 
 struct expression* operator>>(const struct expression& e1, const struct expression& e2) {
-	//TODO : improve this
+	//This operation is only permitted if e1 is an integers.
+	//We allow implicit conversion for e2 from double to int
 	struct expression* ret;
 
-	switch (e1.t) {
-	case _INT:
+	// Error gestion : if used in order to avoid repetition in the switch
+	if (e1.t == _VOID || e2.t == _VOID) {
+		error_funct(_ERROR_COMPIL, "invalid use of void expression");
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
+		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
+		// In this case, we consider that the expression has already an error and we don't consider others errors
+		// in order to don't flood the error output with big expressions.
+		ret = new expression(_ERROR, -1, e1.hash_table);
+	}
+	else {
 		int conversion;
-
-		switch (e2.t) {
+		switch (e1.t) {
 		case _INT:
-			ret = new expression(_INT, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << e2.var <<
-						 "\n";
+
+			switch (e2.t) {
+
+			case _INT:
+				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << e2.var << "\n";
+				break;
+
+			case _DOUBLE:
+				// In this cas we made an implicit convertion for e2 from double to int
+				conversion = new_var();
+				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret->code << e1.code.str() << e2.code.str();
+				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
+				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << conversion << "\n";
+				break;
+
+			default:
+				break;
+			}
+
 			break;
 
 		case _DOUBLE:
-			// In this cas we made an implicit convertion for e2 from double to int
-			conversion = new_var();
-			ret = new expression(_INT, new_var(), e1.hash_table);
-			ret->code << e1.code.str() << e2.code.str();
-			ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
-			ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << conversion
-					  << "\n";
+			error_funct(_ERROR_COMPIL, "SHR operation canno't be applied to a double expression");
+			ret = new expression(_ERROR, -1, e1.hash_table);
 			break;
 
 		default:
-			cerr << "Wrong type for the expression";
-			ret = new expression(_ERROR, -1, e1.hash_table);
 			break;
 		}
-
-		break;
-
-	case _DOUBLE:
-		cerr << "SHL operation canno't be applied to a double expression";
-		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
-
-	default:
-		cerr << "Wrong type for the expression";
-		ret = new expression(_ERROR, -1, e1.hash_table);
-		break;
 	}
-
 	return ret;
 }
 

@@ -896,8 +896,16 @@ int main (int argc, char *argv[]) {
     yyparse();
 
 
-    free(file_name);
-    fclose(input);
+    BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+        if (i.second.from_q5 == false && !i.second.used) {
+            if (i.second.symbolType == _LOCAL_VAR || i.second.symbolType == _GLOBAL_VAR)
+                error_funct(_WARNING_COMPIL, "unused variable ", i.first);
+            else if (i.second.symbolType == _FUNCTION && i.first != "main")
+                // We can use == comparison because i.first is a string (cf utilityFunction header)
+                error_funct(_WARNING_COMPIL, "unused function ", i.first);
+        }
+    }
+
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
         if (i.second.from_q5 == false) {
@@ -913,5 +921,11 @@ int main (int argc, char *argv[]) {
         }
     }
 
-    return 0;
+
+    free(file_name);
+    fclose(input);
+    if (has_error)
+        return EXIT_FAILURE;
+    else
+        return EXIT_SUCCESS;
 }

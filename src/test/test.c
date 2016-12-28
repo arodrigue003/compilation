@@ -1,3 +1,12 @@
+int lol(int i){}
+
+int caca(){}
+
 int main() {
-	-(-(4+5.0));
+	int i;
+	i-4;
+	lol();
+	i();
+	g();
+	lol(42);
 }
