@@ -14,15 +14,15 @@ declaration_list::declaration_list(enum simple_type t, string name, map_boost &h
 
 	int var = new_var();
 	switch (t) {
-		case _INT:
-			code << "i32 %x" << var;
-			break;
-		case _DOUBLE:
-			code << "double %x" << var;
-			break;
-		default:
-			cout << "ERROR" << endl;
-			break;
+	case _INT:
+		code << "i32 %x" << var;
+		break;
+	case _DOUBLE:
+		code << "double %x" << var;
+		break;
+	default:
+		cout << "ERROR" << endl;
+		break;
 	}
 
 	struct identifier id;
@@ -42,60 +42,65 @@ declaration_list::declaration_list(enum simple_type t, string name, map_boost &h
 
 
 int new_var() {
-    static int i = 0;
-    return i++;
+	static int i = 0;
+	return i++;
 }
 
 int new_label() {
-    static int i = 0;
-    return i++;
+	static int i = 0;
+	return i++;
 }
 
 char* double_to_hex_str(double d) {
-    char* s = nullptr;
-    union {
-        double a;
-        long long int b;
-    } u;
-    u.a = d;
-    asprintf(&s, "%#08llx", u.b);
-    return s;
+	char* s = nullptr;
+
+	if (d != 0.0) {
+		union {
+			double a;
+			long long int b;
+		} u;
+		u.a = d;
+		asprintf(&s, "%#08llx", u.b);
+	}
+	else
+		asprintf(&s, "0x000000000000000");
+	return s;
 }
 
 void add_identifier(vector<identifier> to_store, stringstream& ss) {
-    for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it) {
-        struct identifier id;
+	for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it) {
+		struct identifier id;
 
-        switch ((*it).t) {
-        case _INT:
+		switch ((*it).t) {
+		case _INT:
 			ss << (*it).name << " = alloca i32\n";
-            break;
+			break;
 
-        case _DOUBLE:
+		case _DOUBLE:
 			ss << (*it).name << " = alloca double\n";
-            break;
+			break;
 
-        default:
-            cout << "ERROR\n";
-            break;
-        }
+		default:
+			cout << "ERROR\n";
+			break;
+		}
 
-        switch ((*it).t) {
-        case _INT:
+		switch ((*it).t) {
+		case _INT:
 			ss << "store i32 %x" << (*it).register_no << ", i32* " << (*it).name << "\n";
-            break;
+			break;
 
-        case _DOUBLE:
+		case _DOUBLE:
 			ss << "store double %x" << (*it).register_no << ", double* " << (*it).name << "\n";
-            break;
+			break;
 
-        default:
-            cout << "ERROR\n";
-            break;
-        }
-    }
+		default:
+			cout << "ERROR\n";
+			break;
+		}
+	}
 
-    to_store.clear();
+	to_store.clear();
 }
 
 
