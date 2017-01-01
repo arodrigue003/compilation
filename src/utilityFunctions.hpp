@@ -52,7 +52,7 @@ struct type_list {
 int new_var();
 int new_label();
 
-void add_identifier(vector<identifier> to_store, stringstream& ss); //TODO changer cette merde
+void add_identifier(vector<identifier> &to_store, stringstream& ss); //TODO changer cette merde
 
 char* double_to_hex_str(double d);
 

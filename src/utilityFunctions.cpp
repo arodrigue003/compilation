@@ -8,20 +8,37 @@ declaration_list::declaration_list(enum simple_type t, string name, map_boost &h
 
 	if (hash_table.find(name) != hash_table.end()) {
 		// We don't let redifinition of an identifier occur
-		error_funct(_ERROR_COMPIL, "Redefinition of identifier ", name);
+		error_funct(_ERROR_COMPIL, "redeclaration ", name);
 		return ;
 	}
 
 	int var = new_var();
 	switch (t) {
+
 	case _INT:
 		code << "i32 %x" << var;
 		break;
+
 	case _DOUBLE:
 		code << "double %x" << var;
 		break;
+
+	case _VOID:
+		error_funct(_ERROR_COMPIL, "Invalid use of void expression");
+		break;
+
+	case _BOOL:
+		error_funct(_ERROR_COMPIL, "Invalid use of boolean expression");
+		break;
+
+	case _ERROR:
+		// In this case, we consider that the expression has already an error and we don't consider others errors
+		// in order to don't flood the error output with big expressions.
+		break;
+
 	default:
-		cout << "ERROR" << endl;
+		// If you see this something really goes wrong withe the compiler
+		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
 		break;
 	}
 
@@ -67,39 +84,67 @@ char* double_to_hex_str(double d) {
 	return s;
 }
 
-void add_identifier(vector<identifier> to_store, stringstream& ss) {
-	for (std::vector<identifier>::iterator it = to_store.begin(); it != to_store.end(); ++it) {
+void add_identifier(vector<identifier> &to_store, stringstream& ss) {
+
+	BOOST_FOREACH(identifier id_old, to_store) {
 		struct identifier id;
 
-		switch ((*it).t) {
+		switch (id_old.t) {
 		case _INT:
-			ss << (*it).name << " = alloca i32\n";
+			ss << "  " << id_old.name << " = alloca i32\n";
 			break;
 
 		case _DOUBLE:
-			ss << (*it).name << " = alloca double\n";
+			ss << "  " << id_old.name << " = alloca double\n";
+			break;
+
+		case _VOID:
+			error_funct(_ERROR_COMPIL, "Invalid use of void expression");
+			break;
+
+		case _BOOL:
+			error_funct(_ERROR_COMPIL, "Invalid use of boolean expression");
+			break;
+
+		case _ERROR:
+			// In this case, we consider that the expression has already an error and we don't consider others errors
+			// in order to don't flood the error output with big expressions.
 			break;
 
 		default:
-			cout << "ERROR\n";
+			// If you see this something really goes wrong withe the compiler
+			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
 			break;
 		}
 
-		switch ((*it).t) {
+		switch (id_old.t) {
 		case _INT:
-			ss << "store i32 %x" << (*it).register_no << ", i32* " << (*it).name << "\n";
+			ss << "  store i32 %x" << id_old.register_no << ", i32* " << id_old.name << "\n";
 			break;
 
 		case _DOUBLE:
-			ss << "store double %x" << (*it).register_no << ", double* " << (*it).name << "\n";
+			ss << "  store double %x" << id_old.register_no << ", double* " << id_old.name << "\n";
+			break;
+
+		case _VOID:
+			error_funct(_ERROR_COMPIL, "Invalid use of void expression");
+			break;
+
+		case _BOOL:
+			error_funct(_ERROR_COMPIL, "Invalid use of boolean expression");
+			break;
+
+		case _ERROR:
+			// In this case, we consider that the expression has already an error and we don't consider others errors
+			// in order to don't flood the error output with big expressions.
 			break;
 
 		default:
-			cout << "ERROR\n";
+			// If you see this something really goes wrong withe the compiler
+			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
 			break;
 		}
 	}
-
 	to_store.clear();
 }
 
@@ -118,10 +163,10 @@ int error_funct (enum error_type et, string s) {
 
 	case _ERROR_COMPIL:
 		cerr << "error: ";
+		has_error = true;
 		break;
 	}
 	cerr << s << endl;
-	has_error = true;
 	return 0;
 }
 
@@ -135,9 +180,9 @@ int error_funct(enum error_type et, string s1, string s2) {
 
 	case _ERROR_COMPIL:
 		cerr << "error: ";
+		has_error = true;
 		break;
 	}
 	cerr << s1 << s2 << endl;
-	has_error = true;
 	return 0;
 }

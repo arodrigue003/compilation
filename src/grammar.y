@@ -8,18 +8,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
+#include <boost/program_options.hpp>
 
 #include "expression.hpp"
 #include "statement.hpp"
 
 using namespace std;
+namespace po = boost::program_options;
 
 // headers definition to permit compilation
 extern int yylineno;
 int yyerror(const char *s);
-char *file_name = nullptr;
+string file_name;
 extern int column;
 extern int yylineno;
 
@@ -35,6 +38,8 @@ extern "C"
 
 int indentation_lvl = 0;
 bool has_error = false;
+bool debug;
+ofstream output;
 
 //Hash map
 map_boost global_hash_table;
@@ -279,7 +284,7 @@ logical_and_expression
 {
     $$ = $1;
 }
-| logical_and_expression AND comparison_expression
+| logical_and_expression AND logical_neg_expression
 {
     $$ = *$1 && *$3;
     delete $1; $1 = nullptr; delete $3; $3 = nullptr;
@@ -345,7 +350,7 @@ expression
 
         default:
             $$ = new expression(_ERROR, -1, global_hash_table);
-            cerr << "Wrong assignment type" << endl;
+            error_funct(_ERROR_COMPIL, "Unexpected symbol");
             break;
     }
 
@@ -395,58 +400,16 @@ assignment_operator
 declaration
 : type_name declarator_list ';'
 {
-    $$ = new code_container();
-    struct identifier id;
-    BOOST_FOREACH(identifier id_old, $2->idList) {
-        switch ($1) {
-            case _INT:
-                $$->code << "%" << id_old.name << " = alloca i32\n";
-                break;
-            case _DOUBLE:
-                $$->code << "%" << id_old.name << " = alloca double\n";
-                break;
-            default:
-                cout << "ERROR\n";
-                break;
-        }
-
-        id.t = $1;
-        id.name = "%" + id_old.name;
-        id.symbolType = _LOCAL_VAR;
-        global_hash_table[id_old.name] = id;
-    }
-
-    delete $2;
-    $2 = nullptr;
+    $$ = local_declaration($1, *$2, global_hash_table);
+    delete $2; $2 = nullptr;
 }
 ;
 
 global_declaration
 : type_name declarator_list ';'
 {
-    $$ = new code_container();
-    struct identifier id;
-    BOOST_FOREACH(identifier id_old, $2->idList) {
-        switch ($1) {
-            case _INT:
-                $$->code << "@" << id_old.name << " = common global i32 0\n";
-                break;
-            case _DOUBLE:
-                $$->code << "@" << id_old.name << " = common global double 0x000000000000000\n";
-                break;
-            default:
-                cout << "ERROR\n";
-                break;
-        }
-
-        id.t = $1;
-        id.name = "@" + id_old.name;
-        id.symbolType = _GLOBAL_VAR;
-        global_hash_table[id_old.name] = id;
-    }
-
-    delete $2;
-    $2 = nullptr;
+    $$ = global_declaration($1, *$2, global_hash_table);
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -459,7 +422,6 @@ declarator_list
 {
     $$ = $1;
     $$->idList.insert($$->idList.end(), $3->idList.begin(), $3->idList.end());
-
     delete $3; $3 = nullptr;
 }
 ;
@@ -483,12 +445,9 @@ declarator
 : IDENTIFIER
 {
     $$ = new declaration_list();
-
     struct identifier id;
     id.name = $1;
-
     $$->idList.push_back(id);
-
     free($1); $1 = nullptr;
 }
 ;
@@ -503,7 +462,6 @@ parameter_list
     $$ = $1;
     $$->code << ", " << $3->code.str();
     $$->idList.insert($$->idList.end(), $3->idList.begin(), $3->idList.end());
-
     delete $3; $3 = nullptr;
 }
 ;
@@ -571,9 +529,7 @@ declaration_list
 {
     $$ = $1;
     $$->code << $2->code.str();
-
-    delete $2;
-    $2 = nullptr;
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -623,7 +579,6 @@ selection_statement
     $$ = for_then(*$3, *$5, *$7, *$9);
     delete $3; $3 = nullptr; delete $5; $5 = nullptr;
     delete $7; $7 = nullptr; delete $9; $9 = nullptr;
-
 }
 | FOR '(' expression ';' expression ';'            ')' statement
 {
@@ -680,28 +635,12 @@ jump_statement
 {
     $$ = new code_container();
     $$->has_return = true;
-    $$->code << "ret void\n";
+    $$->code << "  ret void\n";
 }
 | RETURN expression ';'
 {
-    $$ = new code_container();
-    $$->has_return = true;
-    $$->code << $2->code.str() << "ret ";
-    switch ($2->getT()) {
-        case _INT:
-            $$->code << "i32 %x" << $2->getVar();
-            break;
-        case _DOUBLE:
-            $$->code << "double %x" << $2->getVar();
-            break;
-        default:
-            cout << "ERROR\n";
-            break;
-    }
-    $$->code << "\n";
-
-    delete $2;
-    $2 = nullptr;
+    $$ = return_statement(*$2);
+    delete $2; $2 = nullptr;
 }
 ;
 
@@ -709,10 +648,19 @@ program_entry
 : program
 {
     struct code_container *cc = declare_q5_used_functions(global_hash_table);
-    cout << cc->code.str() << "\n";
-    delete cc; cc = nullptr;
-    cout << $1->code.str();
-    delete $1; $1 = nullptr;
+
+    if (!has_error) {
+        if (debug) {
+            cout << cc->code.str() << "\n";
+            cout << $1->code.str();
+        }
+        else {
+            output << cc->code.str() << "\n";
+            output << $1->code.str();
+        }
+    }
+
+    delete cc; cc = nullptr; delete $1; $1 = nullptr;
 }
 ;
 
@@ -773,82 +721,12 @@ function_definition
 /* : type_name declarator compound_statement */
 : type_name IDENTIFIER '(' parameter_list ')' compound_statement
 {
-    $$ = new code_container();
-    $$->code << "define ";
-    switch ($1) {
-        case _INT:
-            $$->code << "i32 ";
-            break;
-        case _DOUBLE:
-            $$->code << "double ";
-            break;
-        case _VOID:
-            $$->code << "void ";
-            break;
-        default:
-            cout << "ERROR 1\n";
-            break;
-    }
-    $$->code << "@" << $2 << " (" << $4->code.str() << ")\n" << "{\n";
-    add_identifier($4->idList, $$->code);
-    $$->code << $6->code.str();
-
-    if ($1 != _VOID && $6->has_return == false)
-        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
-    if ($1 == _VOID && $6->has_return == false)
-        $$->code << "  ret void\n";
-
-    $$->code << "}\n\n";
-
-    // add function name to the hash table
-    struct identifier id;
-    id.t = $1;
-    string temp = $2;
-    id.name = "@" + temp;
-    id.symbolType = _FUNCTION;
-    BOOST_FOREACH(identifier id_old, $4->idList) {
-        id.paramTypes.push_back(id_old.t);
-    }
-    global_hash_table[$2] = id;        
-
+    $$ = define_funct($1, $2, $4, $6, global_hash_table);
     delete $4; $4 = nullptr; delete $6; $6 = nullptr; free($2); $2 = nullptr;
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
-    $$ = new code_container();
-    $$->code << "define ";
-    switch ($1) {
-        case _INT:
-            $$->code << "i32 ";
-            break;
-        case _DOUBLE:
-            $$->code << "double ";
-            break;
-        case _VOID:
-            $$->code << "void ";
-            break;
-        default:
-            cout << "ERROR 1\n";
-            break;
-    }
-    $$->code << "@" << $2 << " ()\n"  << "{\n";
-    $$->code << $5->code.str();
-
-    if ($1 != _VOID && $5->has_return == false)
-        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
-    if ($1 == _VOID && $5->has_return == false)
-        $$->code << "  ret void\n";
-
-    $$->code << "}\n\n";
-
-    // add function name to the hash table
-    struct identifier id;
-    id.t = $1;
-    string temp = $2;
-    id.name = "@" + temp;
-    id.symbolType = _FUNCTION;
-    global_hash_table[$2] = id;
-
+    $$ = define_funct($1, $2, $5, global_hash_table);
     delete $5; $5 = nullptr; free($2); $2 = nullptr;
 }
 ;
@@ -859,14 +737,11 @@ function_definition
 
 extern int yylineno;
 extern int yydebug;
-
-
 extern char yytext[];
 extern FILE *yyin;
 
 
 int yyerror (const char *s) {
-
     cerr << file_name << ":" << yylineno << ":" << column << ": " << s << endl;
     return 0;
 }
@@ -874,27 +749,64 @@ int yyerror (const char *s) {
 
 int main (int argc, char *argv[]) {
 
-    FILE *input = nullptr;
-    if (argc==2) {
-        input = fopen(argv[1], "r");
-	file_name = strdup (argv[1]);
-	if (input) {
-	    yyin = input;
-	}
-	else {
-            cerr << argv[0] << ": Could not open " << argv[1] << endl;
-            return EXIT_FAILURE;
-	}
+    po::options_description
+    desc("Packer usage : ./packer [options] input-file\nAllowed options ");
+    desc.add_options()
+    ("help", "produce help message")
+    ("input-file", po::value<string>()->required(), "input file path")
+    ("output-file,o", po::value<string>(), "output file path (default is file_name.ll)")
+    ("debug,d", po::value<bool>(), "show debug informations : program output and hash table");
+    po::variables_map vm; //Parameters container
+    po::positional_options_description p; //Used to indicate input file without --input-file
+    p.add("input-file", -1);
+
+    try {
+        //Effectively parse the command line
+        po::store(po::command_line_parser(argc, argv).
+                  options(desc).positional(p).allow_unregistered().run(), vm);
+
+        if (vm.count("help")) {
+            cerr << desc << endl;
+            return EXIT_SUCCESS;
+        }
+
+        //Check parsing errors (required parameters, ...)
+        po::notify(vm);
     }
-    else {
-        cerr << argv[0] << ": error: no input file" << endl;
+    catch (exception& e) {
+        cerr << "Error : " << e.what() << endl;
         return EXIT_FAILURE;
     }
 
+    // Open input file
+    FILE *input = nullptr; //C file are used because yacc don't accept C++ ones
+    file_name = vm["input-file"].as<string>().c_str();
+    input = fopen(file_name.c_str(), "r");
+    if (input) {
+        yyin = input;
+    }
+    else {
+        cerr << argv[0] << ": Could not open " << file_name.c_str() << endl;
+        return EXIT_FAILURE;
+    }
+
+    // Open output file
+    if (vm.count("output-file")) {
+        output.open(vm["output-file"].as<string>());
+    }
+    else {
+        string output_file = vm["input-file"].as<string>();
+        output_file.erase(output_file.size()-1).append("ll");
+        output.open(output_file);
+    }
+
+    // setup debug flag
+    (vm.count("debug")) ? debug = true : debug = false;
+
     setup_p5(global_hash_table);
 
-    yyparse();
-
+    if (yyparse() == 1)
+        return EXIT_FAILURE;
 
     BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
         if (i.second.from_q5 == false && !i.second.used) {
@@ -906,24 +818,26 @@ int main (int argc, char *argv[]) {
         }
     }
 
-
-    BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
-        if (i.second.from_q5 == false) {
-            if (i.second.symbolType == _LOCAL_VAR)
-                cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-            else if (i.second.symbolType == _GLOBAL_VAR)
-                cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-            else if (i.second.symbolType == _FUNCTION) {
-                cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
-                    cout << "  - " << st << endl;
+    if (debug) {
+        cout << "Symbol table at the end of parser execution" << endl;
+        BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+            if (i.second.from_q5 == false) {
+                if (i.second.symbolType == _LOCAL_VAR)
+                    cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                else if (i.second.symbolType == _GLOBAL_VAR)
+                    cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                else if (i.second.symbolType == _FUNCTION) {
+                    cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                        cout << "  - " << st << endl;
+                }
             }
         }
     }
 
 
-    free(file_name);
     fclose(input);
+    output.close();
     if (has_error)
         return EXIT_FAILURE;
     else

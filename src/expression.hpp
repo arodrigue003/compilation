@@ -80,7 +80,6 @@ struct expression *incr_prefix(string name, map_boost &hash_table);
 struct expression *decr_prefix(string name, map_boost &hash_table);
 struct expression *opposite(const struct expression &e1);
 
-
 struct arg_expr_list{
 	vector<expression *> codeV;
 };

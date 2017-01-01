@@ -12,7 +12,8 @@ expression::expression(string s, map_boost& hash) : hash_table(hash) {
 		return;
 	}
 	else {
-		struct identifier id = hash_table.at(s);
+		struct identifier &id = hash_table.at(s);
+		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {
 			// In this case, we try to laod an expression to an identifier which doesn't accept one
 			// For exemple we try to get a value from a function name
@@ -191,7 +192,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 							// Need to convert expression from double to int
 							newVar = new_var();
 							code << expression->code.str();
-							code << "%x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
+							code << "  %x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
 							expression->setVar(newVar);
 							break;
 
@@ -209,7 +210,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 							// Need to convert expression from int to double
 							newVar = new_var();
 							code << expression->code.str();
-							code << "%x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
+							code << "  %x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
 							expression->setVar(newVar);
 							break;
 
@@ -555,7 +556,8 @@ struct expression* expression::operator=(string s) {
 	}
 
 	else {
-		struct identifier id = hash_table.at(s);
+		struct identifier &id = hash_table.at(s);
+		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {
 			// In this case, we try to assign an expression to an identifier which doesn't accept one
 			// For exemple we try to assign an expression to a function name
@@ -566,18 +568,21 @@ struct expression* expression::operator=(string s) {
 			int newVar = var;
 
 			// Error gestion : if used in order to avoid repetition in the switch
-			if (e1.t == _VOID || e2.t == _VOID) {
+			if (t == _VOID || id.t == _VOID) {
 				error_funct(_ERROR_COMPIL, "invalid use of void expression");
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				t = _ERROR;
+				var = -1;
 			}
-			else if (e1.t == _BOOL || e2.t == _BOOL) {
+			else if (t == _BOOL || id.t == _BOOL) {
 				error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				t = _ERROR;
+				var = -1;
 			}
-			else if (e1.t == _ERROR || e2.t == _ERROR) {
+			else if (t == _ERROR || id.t == _ERROR) {
 				// In this case, we consider that the expression has already an error and we don't consider others errors
 				// in order to don't flood the error output with big expressions.
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				t = _ERROR;
+				var = -1;
 			}
 			else {
 				switch (id.t) {
@@ -602,7 +607,8 @@ struct expression* expression::operator=(string s) {
 						break;
 
 					default:
-						ret = new expression(_ERROR, -1, e1.hash_table);
+						t = _ERROR;
+						var = -1;
 						break;
 
 					}
@@ -634,7 +640,8 @@ struct expression* expression::operator=(string s) {
 					break;
 
 				default:
-					ret = new expression(_ERROR, -1, e1.hash_table);
+					t = _ERROR;
+					var = -1;
 					break;
 				}
 			}

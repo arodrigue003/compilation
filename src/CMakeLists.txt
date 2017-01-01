@@ -14,3 +14,4 @@ add_library(lexer STATIC lex.yy.c grammar.tab.h)
 
 add_executable(parser grammar.cpp utilityFunctions.cpp expression.cpp statement.cpp)
 target_link_libraries(parser lexer)
+target_link_libraries(parser boost_program_options)

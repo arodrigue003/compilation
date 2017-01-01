@@ -29,6 +29,7 @@ L[a-zA-Z_]
 "-="		{ count(); return(SUB_ASSIGN); }
 "*="		{ count(); return(MUL_ASSIGN); }
 "/="		{ count(); return(DIV_ASSIGN); }
+"%="		{ count(); return(REM_ASSIGN); }
 "<<="		{ count(); return(SHL_ASSIGN); }
 ">>="		{ count(); return(SHR_ASSIGN); }
 "++"		{ count(); return(INC_OP); }
