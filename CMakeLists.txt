@@ -43,6 +43,7 @@ endforeach ()
 
 
 add_subdirectory(src)
+add_subdirectory(test)
 
 # Use Astyle to reformat source files
 add_custom_target(format

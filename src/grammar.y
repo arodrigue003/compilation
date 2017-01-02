@@ -819,9 +819,24 @@ int main (int argc, char *argv[]) {
     }
 
     if (debug) {
-        cout << "Symbol table at the end of parser execution" << endl;
+        cout << "Intern Symbol table at the end of parser execution" << endl;
         BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
             if (i.second.from_q5 == false) {
+                if (i.second.symbolType == _LOCAL_VAR)
+                    cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                else if (i.second.symbolType == _GLOBAL_VAR)
+                    cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                else if (i.second.symbolType == _FUNCTION) {
+                    cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                        cout << "  - " << st << endl;
+                }
+            }
+        }
+
+        cout << endl << "p5 Symbol table at the end of parser execution" << endl;
+        BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+            if (i.second.from_q5 == true) {
                 if (i.second.symbolType == _LOCAL_VAR)
                     cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
                 else if (i.second.symbolType == _GLOBAL_VAR)

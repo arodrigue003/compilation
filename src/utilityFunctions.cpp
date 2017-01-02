@@ -145,7 +145,6 @@ void add_identifier(vector<identifier> &to_store, stringstream& ss) {
 			break;
 		}
 	}
-	to_store.clear();
 }
 
 
@@ -185,4 +184,105 @@ int error_funct(enum error_type et, string s1, string s2) {
 	}
 	cerr << s1 << s2 << endl;
 	return 0;
+}
+
+
+//Function to add p5 functions to the hash table in order to recognize them
+void setup_p5(map_boost &hash) {
+	// mathematicals functions
+	struct identifier math;
+
+	math = identifier(_VOID, "@noStroke");
+	hash["noStroke"] = math;
+	math = identifier(_VOID, "@noLoop");
+	hash["noLoop"] = math;
+
+	math = identifier(_DOUBLE, "@log10", _DOUBLE);
+	hash["log10"] = math;
+	math = identifier(_DOUBLE, "@cos", _DOUBLE);
+	hash["cos"] = math;
+	math = identifier(_DOUBLE, "@sin", _DOUBLE);
+	hash["sin"] = math;
+	math = identifier(_DOUBLE, "@sqrt", _DOUBLE);
+	hash["sqrt"] = math;
+	math = identifier(_DOUBLE, "@radians", _DOUBLE);
+	hash["radians"] = math;
+
+
+	math = identifier(_VOID, "@fill", _DOUBLE);
+	hash["fill"] = math;
+	math = identifier(_VOID, "@background", _DOUBLE);
+	hash["background"] = math;
+	math = identifier(_VOID, "@stroke", _DOUBLE);
+	hash["stroke"] = math;
+	math = identifier(_VOID, "@frameRate", _DOUBLE);
+	hash["frameRate"] = math;
+	math = identifier(_VOID, "@createCanvas", _DOUBLE, _DOUBLE);
+	hash["createCanvas"] = math;
+
+	math = identifier(_VOID, "@point", _DOUBLE, _DOUBLE);
+	hash["point"] = math;
+
+	math = identifier(_VOID, "@line", _DOUBLE, _DOUBLE, _DOUBLE, _DOUBLE);
+	hash["line"] = math;
+	math = identifier(_VOID, "@ellipse", _DOUBLE, _DOUBLE, _DOUBLE, _DOUBLE);
+	hash["ellipse"] = math;
+	math = identifier(_VOID, "@rect", _DOUBLE, _DOUBLE, _DOUBLE, _DOUBLE);
+	hash["rect"] = math;
+}
+
+
+// used for function declaration
+struct code_container* declare_q5_used_functions(map_boost &hash_table) {
+	struct code_container *ret = new code_container();
+
+	struct identifier id;
+	BOOST_FOREACH(map_boost::value_type i, hash_table) {
+		id = i.second;
+		if (id.from_q5 && id.used && id.symbolType == _FUNCTION) {
+
+			ret->code << "declare ";
+			switch (id.t) {
+			case _INT:
+				ret->code << "i32 ";
+				break;
+			case _DOUBLE:
+				ret->code << "double ";
+				break;
+			default:
+				ret->code << "void ";
+				break;
+			}
+			ret->code << id.name << "(";
+			int count = 0;
+			int size = id.paramTypes.size();
+			BOOST_FOREACH(enum simple_type param_type, id.paramTypes) {
+
+				count++;
+
+				switch (param_type) {
+
+				case _INT:
+					ret->code << "i32";
+					if (count < size) ret->code << ", ";
+					break;
+
+				case _DOUBLE:
+					ret->code << "double";
+					if (count < size) ret->code << ", ";
+					break;
+
+				default:
+					cout << "ERROR" << endl;
+					break;
+
+				}
+
+			}
+
+			ret->code << ")\n";
+		}
+	}
+
+	return ret;
 }

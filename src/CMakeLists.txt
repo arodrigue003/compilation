@@ -1,5 +1,3 @@
-add_subdirectory(test)
-
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scanner.l ${CMAKE_CURRENT_BINARY_DIR}/scanner.l @ONLY)
 add_custom_command(OUTPUT lex.yy.c
                     COMMAND lex scanner.l

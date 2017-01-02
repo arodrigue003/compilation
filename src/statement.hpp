@@ -22,12 +22,7 @@ struct code_container* while_then(const struct expression& e1, const struct code
 
 struct code_container* do_while(const struct code_container& s1, const struct expression& e1);
 
-
-//Function to add p5 functions to the hash table in order to recognize them
-void setup_p5(map_boost &hash);
-
 // used for function declaration
-struct code_container* declare_q5_used_functions(map_boost &hash_table);
 struct code_container* declare_funct(enum simple_type t, string name, map_boost &hash_table);
 struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_boost &hash_table);
 

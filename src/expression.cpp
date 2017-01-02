@@ -8,6 +8,7 @@ expression::expression(string s, map_boost& hash) : hash_table(hash) {
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
+		code << "error";
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 		return;
 	}
@@ -19,6 +20,7 @@ expression::expression(string s, map_boost& hash) : hash_table(hash) {
 			// For exemple we try to get a value from a function name
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, "Can't load value of ", s);
 		}
 		else {
@@ -82,6 +84,7 @@ expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) { //
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
+		code << "error";
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
@@ -90,10 +93,12 @@ expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) { //
 			// In this case, we try to call something that is not a function
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, s, " is not a function");
 		} else if (!id.paramTypes.empty()) {
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, "too much arguments to function ", s);
 		}
 		else {
@@ -124,6 +129,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
+		code << "error";
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
@@ -132,16 +138,19 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 			// In this case, we try to call something that is not a function
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, s, " is not a function");
 		}
 		else if (id.paramTypes.size() < ael.codeV.size()) {
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, "too much arguments to function ", s);
 		}
 		else if (id.paramTypes.size() > ael.codeV.size()) {
 			t = _ERROR;
 			var = -1;
+			code << "error";
 			error_funct(_ERROR_COMPIL, "too few arguments to function ", s);
 		}
 		else {
@@ -570,19 +579,16 @@ struct expression* expression::operator=(string s) {
 			// Error gestion : if used in order to avoid repetition in the switch
 			if (t == _VOID || id.t == _VOID) {
 				error_funct(_ERROR_COMPIL, "invalid use of void expression");
-				t = _ERROR;
-				var = -1;
+				ret = new expression(_ERROR, -1, hash_table);
 			}
 			else if (t == _BOOL || id.t == _BOOL) {
 				error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-				t = _ERROR;
-				var = -1;
+				ret = new expression(_ERROR, -1, hash_table);
 			}
 			else if (t == _ERROR || id.t == _ERROR) {
 				// In this case, we consider that the expression has already an error and we don't consider others errors
 				// in order to don't flood the error output with big expressions.
-				t = _ERROR;
-				var = -1;
+				ret = new expression(_ERROR, -1, hash_table);
 			}
 			else {
 				switch (id.t) {
