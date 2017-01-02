@@ -1,6 +1,5 @@
 mergeInto(LibraryManager.library,
 {
-    radians: function(a) { radian(a); },
     ellipse: function(a,b,c,d) { ellipse(a,b,c,d); },
     rect: function(a,b,c,d) { rect(a,b,c,d); },
     createCanvas: function(x, y) { createCanvas(x, y); },

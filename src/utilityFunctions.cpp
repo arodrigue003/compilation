@@ -205,9 +205,6 @@ void setup_p5(map_boost &hash) {
 	hash["sin"] = math;
 	math = identifier(_DOUBLE, "@sqrt", _DOUBLE);
 	hash["sqrt"] = math;
-	math = identifier(_DOUBLE, "@radians", _DOUBLE);
-	hash["radians"] = math;
-
 
 	math = identifier(_VOID, "@fill", _DOUBLE);
 	hash["fill"] = math;
