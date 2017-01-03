@@ -49,8 +49,6 @@ stringstream code;
 
 %}
 
-%define parse.error verbose
-
 %token <string_c> IDENTIFIER
 %token <n> CONSTANTI
 %token <d> CONSTANTD

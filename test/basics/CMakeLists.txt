@@ -57,18 +57,3 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test12.c ${CMAKE_CURRENT_BINARY_DIR}/
 add_test(NAME test12 COMMAND parser test12.c) #compilation test with our compiler
 add_test(NAME test12-clang COMMAND clang test12.ll -o test12) #compilation test with clang
 add_test(NAME test12-exe COMMAND ./test12) #execution test
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test13.c ${CMAKE_CURRENT_BINARY_DIR}/test13.c @ONLY)
-add_test(NAME test13 COMMAND parser test13.c) #compilation test with our compiler
-add_test(NAME test13-clang COMMAND clang test13.ll -o test13) #compilation test with clang
-add_test(NAME test13-exe COMMAND ./test13) #execution test
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test14.c ${CMAKE_CURRENT_BINARY_DIR}/test14.c @ONLY)
-add_test(NAME test14 COMMAND parser test14.c) #compilation test with our compiler
-add_test(NAME test14-clang COMMAND clang test14.ll -o test14) #compilation test with clang
-add_test(NAME test14-exe COMMAND ./test14) #execution test
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test15.c ${CMAKE_CURRENT_BINARY_DIR}/test15.c @ONLY)
-add_test(NAME test15 COMMAND parser test15.c) #compilation test with our compiler
-add_test(NAME test15-clang COMMAND clang test15.ll -o test15) #compilation test with clang
-add_test(NAME test15-exe COMMAND ./test15) #execution test
