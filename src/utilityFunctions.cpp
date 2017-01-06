@@ -50,12 +50,63 @@ declaration_list::declaration_list(enum simple_type t, string name, map_list &re
 	id.name = "%" + name;
 	id.register_no = var;
 	id.symbolType = _LOCAL_VAR;
+	id.hash_name = name;
 	idList.push_back(id);
 
 	hash_table[name] = id; //add variable to the global hash table variable
 }
 
+declaration_list::declaration_list(enum simple_type t, string name, void*, map_list &ref_tab) {
 
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
+
+	if (hash_table.find(name) != hash_table.end()) {
+		// We don't let redifinition of an identifier occur
+		error_funct(_ERROR_COMPIL, "redeclaration of ", name);
+		return ;
+	}
+
+	int var = new_var();
+	switch (t) {
+
+	case _INT:
+		code << "i32 %x" << var;
+		break;
+
+	case _DOUBLE:
+		code << "double %x" << var;
+		break;
+
+	case _VOID:
+		error_funct(_ERROR_COMPIL, "Invalid use of void expression");
+		break;
+
+	case _BOOL:
+		error_funct(_ERROR_COMPIL, "Invalid use of boolean expression");
+		break;
+
+	case _ERROR:
+		// In this case, we consider that the expression has already an error and we don't consider others errors
+		// in order to don't flood the error output with big expressions.
+		break;
+
+	default:
+		// If you see this something really goes wrong withe the compiler
+		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
+		break;
+	}
+
+	struct identifier id;
+	id.t = t;
+	id.name = "%" + name;
+	id.register_no = var;
+	id.symbolType = _LOCAL_VAR;
+	id.hash_name = name;
+	idList.push_back(id);
+
+	//hash_table[name] = id; //add variable to the global hash table variable
+}
 
 
 

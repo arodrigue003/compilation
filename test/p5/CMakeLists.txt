@@ -36,3 +36,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${EXE_NAME}.c ${CMAKE_CURRENT_BINARY_
 add_test(NAME ${EXE_NAME} COMMAND parser ${EXE_NAME}.c) #compilation test with our compiler
 add_test(NAME ${EXE_NAME}-emcc COMMAND emcc ${EXE_NAME}.ll --js-library lib/p5-wrap.js -s EXPORTED_FUNCTIONS=['_my_draw','_my_setup'] -o ${EXE_NAME}.js) #compilation test with emcc
 add_custom_target(run-${EXE_NAME} COMMAND firefox ${EXE_NAME}.html)
+
+set(EXE_NAME "rec")
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/index.html ${CMAKE_CURRENT_BINARY_DIR}/${EXE_NAME}.html @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${EXE_NAME}.c ${CMAKE_CURRENT_BINARY_DIR}/${EXE_NAME}.c @ONLY)
+add_test(NAME ${EXE_NAME} COMMAND parser ${EXE_NAME}.c) #compilation test with our compiler
+add_test(NAME ${EXE_NAME}-emcc COMMAND emcc ${EXE_NAME}.ll --js-library lib/p5-wrap.js -s EXPORTED_FUNCTIONS=['_my_draw','_my_setup'] -o ${EXE_NAME}.js) #compilation test with emcc
+add_custom_target(run-${EXE_NAME} COMMAND firefox ${EXE_NAME}.html)

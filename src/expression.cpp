@@ -7,15 +7,16 @@ expression::expression(simple_type t, int var, map_list& ref_tab) : ref_tab(ref_
 expression::expression(string s, map_list& ref_tab) : ref_tab(ref_tab) {
 
 	list<map_boost>::iterator it;
+	bool error = true;
 	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
 		if ((*it).find(s) != (*it).end()) {
-			 goto end;
+			error = false;
+			goto end;
 		}
 	}
 	end:
-	map_boost& hash = *it;
 
-	if (hash.find(s) == hash.end()) {
+	if (error) {
 		t = _ERROR;
 		var = -1;
 		code << "error";
@@ -23,6 +24,7 @@ expression::expression(string s, map_list& ref_tab) : ref_tab(ref_tab) {
 		return;
 	}
 	else {
+		map_boost& hash = *it;
 		struct identifier &id = hash.at(s);
 		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {
@@ -93,21 +95,23 @@ expression::expression(double d, map_list& ref_tab) : ref_tab(ref_tab), t(_DOUBL
 expression::expression(char *s, void *, map_list& ref_tab) : ref_tab(ref_tab) { //without parameter
 
 	list<map_boost>::iterator it;
+	bool error = true;
 	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
 		if ((*it).find(s) != (*it).end()) {
-			 goto end;
+			error = false;
+			goto end;
 		}
 	}
 	end:
 
-	map_boost& hash = *it;
-	if (hash.find(s) == hash.end()) {
+	if (error) {
 		t = _ERROR;
 		var = -1;
 		code << "error";
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
+		map_boost& hash = *it;
 		struct identifier &id = hash.at(s);
 		if (id.symbolType != _FUNCTION) {
 			// In this case, we try to call something that is not a function
@@ -147,21 +151,23 @@ expression::expression(char *s, void *, map_list& ref_tab) : ref_tab(ref_tab) { 
 expression::expression(char *s, struct arg_expr_list &ael, map_list& ref_tab) : ref_tab(ref_tab) { //with parameters
 
 	list<map_boost>::iterator it;
+	bool error = true;
 	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
 		if ((*it).find(s) != (*it).end()) {
-			 goto end;
+			error = false;
+			goto end;
 		}
 	}
 	end:
-	map_boost& hash = *it;
 
-	if (hash.find(s) == hash.end()) {
+	if (error) {
 		t = _ERROR;
 		var = -1;
 		code << "error";
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
+		map_boost& hash = *it;
 		struct identifier &id = hash.at(s);
 		if (id.symbolType != _FUNCTION) {
 			// In this case, we try to call something that is not a function
@@ -587,19 +593,21 @@ struct expression* expression::operator=(string s) {
 	struct expression* ret;
 
 	list<map_boost>::iterator it;
+	bool error = true;
 	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
 		if ((*it).find(s) != (*it).end()) {
-			 goto end;
+			error = false;
+			goto end;
 		}
 	}
 	end:
-	map_boost& hash = *it;
 
-	if (hash.find(s) == hash.end()) {
+	if (error) {
 		ret = new expression(_ERROR, -1, ref_tab);
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
 	else {
+		map_boost& hash = *it;
 		struct identifier &id = hash.at(s);
 		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {

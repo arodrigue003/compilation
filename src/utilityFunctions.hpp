@@ -29,6 +29,7 @@ struct code_container {
 struct identifier {
     enum simple_type t;
     string name;
+	string hash_name;
     int register_no;
     enum identifier_type symbolType;
 	bool from_q5 = false;
@@ -66,6 +67,7 @@ struct declaration_list : public code_container {
 
 public:
 	declaration_list(enum simple_type t, string name, map_list &ref_tab);
+	declaration_list(enum simple_type t, string name, void*, map_list &ref_tab);
 	declaration_list() : code_container(){}
 };
 

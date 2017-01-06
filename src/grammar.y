@@ -471,7 +471,7 @@ parameter_declaration
 : type_name IDENTIFIER
 // simplification de type_name declarator
 {
-    $$ = new declaration_list($1, $2, ref_tab);
+    $$ = new declaration_list($1, $2, nullptr, ref_tab);
     free($2); $2 = nullptr;
 }
 ;
@@ -720,15 +720,61 @@ type_list
 
 function_definition
 /* : type_name declarator compound_statement */
-: type_name IDENTIFIER '(' parameter_list ')' compound_statement
+: type_name IDENTIFIER '(' parameter_list ')'
 {
-    $$ = define_funct($1, $2, $4, $6, ref_tab);
-    delete $4; $4 = nullptr; delete $6; $6 = nullptr; free($2); $2 = nullptr;
+    $<c>$ = define_funct($1, $2, ref_tab);
+
+    // complete function definition
+    struct identifier& id = ref_tab.front().at($2);
+    BOOST_FOREACH(identifier id_old, $4->idList) {
+        id.paramTypes.push_back(id_old.t);
+    }
+
+    ref_tab.push_front(map_boost());
+
+    // add id to hash table
+    map_boost& hash_table = ref_tab.front();
+    BOOST_FOREACH(identifier id_old, $4->idList) {
+        hash_table[id_old.hash_name] = id_old;
+    }
+
 }
-| type_name IDENTIFIER '(' ')' compound_statement
+compound_statement
 {
-    $$ = define_funct($1, $2, $5, ref_tab);
-    delete $5; $5 = nullptr; free($2); $2 = nullptr;
+    $$ = $<c>6;
+    $$->code << $4->code.str() << ")\n" << "{\n";
+    add_identifier($4->idList, $$->code);
+    $$->code << $7->code.str();
+
+    if ($1 != _VOID && $7->has_return == false)
+        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
+    if ($1 == _VOID && $7->has_return == false)
+        $$->code << "  ret void\n";
+
+    $$->code << "}\n\n";
+
+    ref_tab.pop_front();
+    delete $4; $4 = nullptr; delete $7; $7 = nullptr; free($2); $2 = nullptr;
+}
+| type_name IDENTIFIER '(' ')'
+{
+    $<c>$ = define_funct($1, $2, ref_tab);
+    ref_tab.push_front(map_boost());
+}
+compound_statement
+{
+    $$ = $<c>5;
+    $$->code << ")\n" << "{\n" << $6->code.str();
+
+    if ($1 != _VOID && $6->has_return == false)
+        error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
+    if ($1 == _VOID && $6->has_return == false)
+        $$->code << "  ret void\n";
+
+    $$->code << "}\n\n";
+
+    ref_tab.pop_front();
+    delete $6; $6 = nullptr; free($2); $2 = nullptr;
 }
 ;
 
@@ -823,39 +869,10 @@ int main (int argc, char *argv[]) {
     }*/
 
     if (debug) {
-        /*cout << "Intern Symbol table at the end of parser execution" << endl;
-        BOOST_FOREACH(map_boost::value_type i, ref_tab) {
-            if (i.second.from_q5 == false) {
-                if (i.second.symbolType == _LOCAL_VAR)
-                    cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                else if (i.second.symbolType == _GLOBAL_VAR)
-                    cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                else if (i.second.symbolType == _FUNCTION) {
-                    cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                    BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
-                        cout << "  - " << st << endl;
-                }
-            }
-        }
-
-        cout << endl << "p5 Symbol table at the end of parser execution" << endl;
-        BOOST_FOREACH(map_boost::value_type i, ref_tab) {
-            if (i.second.from_q5 == true) {
-                if (i.second.symbolType == _LOCAL_VAR)
-                    cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                else if (i.second.symbolType == _GLOBAL_VAR)
-                    cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                else if (i.second.symbolType == _FUNCTION) {
-                    cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
-                    BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
-                        cout << "  - " << st << endl;
-                }
-            }
-        }*/
-
-        cout << "Intern Symbol table at the end of parser execution" << endl;
 
         BOOST_FOREACH(list<map_boost>::value_type hash, ref_tab) {
+
+            cout << "Intern Symbol table at the end of parser execution" << endl;
             BOOST_FOREACH(map_boost::value_type i, hash) {
                 if (i.second.from_q5 == false) {
                     if (i.second.symbolType == _LOCAL_VAR)

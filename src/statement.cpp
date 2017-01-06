@@ -779,7 +779,7 @@ struct code_container *define_funct(enum simple_type t, string name, struct decl
 	return ret;
 }
 
-struct code_container *define_funct(enum simple_type t, string name, struct code_container *code, map_list &ref_tab) {
+struct code_container *define_funct(enum simple_type t, string name, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
 
 	// ajout dans la table la plus imbriqué
@@ -821,15 +821,7 @@ struct code_container *define_funct(enum simple_type t, string name, struct code
 
 		}
 
-		ret->code << "@" << name << " ()\n" << "{\n";
-		ret->code << code->code.str();
-
-		if (t != _VOID && code->has_return == false)
-			error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
-		if (t == _VOID && code->has_return == false)
-			ret->code << "  ret void\n";
-
-		ret->code << "}\n\n";
+		ret->code << "@" << name << " (";
 
 		// add function name to the hash table
 		struct identifier id;
