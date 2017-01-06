@@ -81,13 +81,9 @@ end:
 }
 
 expression::expression(int i, map_list& ref_tab) : ref_tab(ref_tab), t(_INT), var(-1), primary_expr(true), int_val(i) {
-	code << "  %x" << var << " = add i32 0, " << i << "\n";
 }
 
 expression::expression(double d, map_list& ref_tab) : ref_tab(ref_tab), t(_DOUBLE), var(-1), primary_expr(true), double_val(d) {
-	char* nb_double = double_to_hex_str(d);
-	code << "  %x" << var << " = fadd double 0x000000000000000, " << nb_double << "\n";
-	free(nb_double);
 }
 
 
@@ -312,7 +308,10 @@ end:
 				case _INT:
 					// We can get the imediate value here
 					if (expression->getPrimaryExpr())
-						code << "i32 " << expression->getIntVal();
+						if (expression->getT() == _INT)
+							code << "i32 " << expression->getIntVal();
+						else
+							code << "i32 " << (int) expression->getDoubleVal();
 					else
 						code << "i32 %x" << expression->getVar();
 					if (count < size) code << ", ";
@@ -321,7 +320,10 @@ end:
 				case _DOUBLE:
 					// We can get the imediate value here
 					if (expression->getPrimaryExpr()) {
-						nb_double = double_to_hex_str(expression->getDoubleVal());
+						if (expression->getT() == _INT)
+							nb_double = double_to_hex_str(expression->getIntVal());
+						else
+							nb_double = double_to_hex_str(expression->getDoubleVal());
 						code << "double " << nb_double;
 						free(nb_double);
 					}
@@ -798,7 +800,6 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 
 			case _INT:
 				//in this case we can diretcly compute the value
-				cerr << e1.primary_expr << e2.primary_expr << endl;
 				if (e1.primary_expr && e2.primary_expr){
 					resi = e1.int_val << e2.int_val;
 					ret = new expression(_INT, -1, e1.ref_tab); //store it in a new expression

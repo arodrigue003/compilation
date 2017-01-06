@@ -562,7 +562,7 @@ struct code_container* declare_funct(enum simple_type t, string name, struct typ
 			break;
 
 		default:
-			cout << "ERROR" << endl;
+			error_funct(_ERROR_COMPIL, "error");
 			break;
 
 		}

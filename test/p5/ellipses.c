@@ -13,7 +13,7 @@ void drawTarget(double xloc, double yloc, double size, double num) {
 
 void my_setup() {
 	width = 720;
-	height = 400;
+	height = 320;
 	createCanvas(width, height);
 	background(51);
 	noStroke();

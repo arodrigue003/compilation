@@ -302,7 +302,7 @@ struct code_container* declare_q5_used_functions(map_list &ref_tab) {
 					break;
 
 				default:
-					cout << "ERROR" << endl;
+					error_funct(_ERROR_COMPIL, "error");
 					break;
 
 				}

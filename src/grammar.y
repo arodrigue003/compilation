@@ -874,7 +874,8 @@ int main (int argc, char *argv[]) {
     if (yyparse() == 1)
         return EXIT_FAILURE;
 
-    /*BOOST_FOREACH(map_boost::value_type i, ref_tab) {
+    // Warning for unused functions or global variables
+    BOOST_FOREACH(map_boost::value_type i, ref_tab.front()) {
         if (i.second.from_q5 == false && !i.second.used) {
             if (i.second.symbolType == _LOCAL_VAR || i.second.symbolType == _GLOBAL_VAR)
                 error_funct(_WARNING_COMPIL, "unused variable ", i.first);
@@ -882,7 +883,7 @@ int main (int argc, char *argv[]) {
                 // We can use == comparison because i.first is a string (cf utilityFunction header)
                 error_funct(_WARNING_COMPIL, "unused function ", i.first);
         }
-    }*/
+    }
 
     if (debug) {
 

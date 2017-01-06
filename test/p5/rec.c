@@ -16,7 +16,7 @@ void drawCircle(double x, double radius, double level) {
 
 void my_setup() {
 	width = 720;
-	height = 400;
+	height = 300;
 	createCanvas(width, height);
 	noStroke();
 	noLoop();

@@ -1,7 +1,13 @@
 // Test d'optimisation
+// Doit renvoyer 0
 int main() {
-	int i;
-	i = (1 + 2 + 3 + 5.0 * 17);
+	int ret;
+	ret = 2;
 
-	return i - 91;
+	if( (1 + 2 + 3 + 5 * 17) << 2 < 365)
+		ret = 0;
+	else
+		ret = 1;
+
+	return ret;
 }
