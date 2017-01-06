@@ -564,70 +564,86 @@ expression_statement
 }
 ;
 
+subroutine_if
+: %empty {ref_tab.push_front(map_boost());}
+;
+
 selection_statement
-: IF '(' expression ')' statement %prec LOWER_THAN_ELSE
+: IF '(' expression ')' subroutine_if statement %prec LOWER_THAN_ELSE
 {
-    $$ = if_then_else(*$3, *$5);
-    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
+    $$ = if_then_else(*$3, *$6);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $6; $6 = nullptr;
 }
-| IF '(' expression ')' statement ELSE statement
+| IF '(' expression ')' subroutine_if statement ELSE statement
 {;
-    $$ = if_then_else(*$3, *$5, *$7);
-    delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $7; $7 = nullptr;
-}
-| FOR '(' expression ';' expression ';' expression ')' statement
-{
-    $$ = for_then(*$3, *$5, *$7, *$9);
-    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
-    delete $7; $7 = nullptr; delete $9; $9 = nullptr;
-}
-| FOR '(' expression ';' expression ';'            ')' statement
-{
-    $$ = for_then(*$3, *$5, nullptr, *$8);
-    delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $8; $8 = nullptr;
-}
-| FOR '(' expression ';'            ';' expression ')' statement
-{
-    $$ = for_then(*$3, nullptr, *$6, *$8);
+    $$ = if_then_else(*$3, *$6, *$8);
+    ref_tab.pop_front();
     delete $3; $3 = nullptr; delete $6; $6 = nullptr; delete $8; $8 = nullptr;
 }
-| FOR '(' expression ';'            ';'            ')' statement
+| FOR '(' expression ';' expression ';' expression ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = for_then(*$3, nullptr, nullptr, *$7);
-    delete $3; $3 = nullptr; delete $7; $7 = nullptr;
+    $$ = for_then(*$3, *$5, *$7, *$10);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
+    delete $7; $7 = nullptr; delete $10; $10 = nullptr;
 }
-| FOR '('            ';' expression ';' expression ')' statement
+| FOR '(' expression ';' expression ';'            ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = for_then(nullptr, *$4, *$6, *$8);
-    delete $4; $4 = nullptr; delete $6; $6 = nullptr; delete $8; $8 = nullptr;
+    $$ = for_then(*$3, *$5, nullptr, *$9);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $5; $5 = nullptr; delete $9; $9 = nullptr;
 }
-| FOR '('            ';' expression ';'            ')' statement
+| FOR '(' expression ';'            ';' expression ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = for_then(nullptr, *$4, nullptr, *$7);
-    delete $4; $4 = nullptr; delete $7; $7 = nullptr;
+    $$ = for_then(*$3, nullptr, *$6, *$9);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $6; $6 = nullptr; delete $9; $9 = nullptr;
 }
-| FOR '('            ';'            ';' expression ')' statement
+| FOR '(' expression ';'            ';'            ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = for_then(nullptr, nullptr, *$5, *$7);
-    delete $5; $5 = nullptr; delete $7; $7 = nullptr;
+    $$ = for_then(*$3, nullptr, nullptr, *$8);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $8; $8 = nullptr;
 }
-| FOR '('            ';'            ';'            ')' statement
+| FOR '('            ';' expression ';' expression ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = for_then(nullptr, nullptr, nullptr, *$6);
-    delete $6; $6 = nullptr;
+    $$ = for_then(nullptr, *$4, *$6, *$9);
+    ref_tab.pop_front();
+    delete $4; $4 = nullptr; delete $6; $6 = nullptr; delete $9; $9 = nullptr;
+}
+| FOR '('            ';' expression ';'            ')' {ref_tab.push_front(map_boost());} statement
+{
+    $$ = for_then(nullptr, *$4, nullptr, *$8);
+    ref_tab.pop_front();
+    delete $4; $4 = nullptr; delete $8; $8 = nullptr;
+}
+| FOR '('            ';'            ';' expression ')' {ref_tab.push_front(map_boost());} statement
+{
+    $$ = for_then(nullptr, nullptr, *$5, *$8);
+    ref_tab.pop_front();
+    delete $5; $5 = nullptr; delete $8; $8 = nullptr;
+}
+| FOR '('            ';'            ';'            ')' {ref_tab.push_front(map_boost());} statement
+{
+    $$ = for_then(nullptr, nullptr, nullptr, *$7);
+    ref_tab.pop_front();
+    delete $7; $7 = nullptr;
 }
 ;
 
 iteration_statement
-: WHILE '(' expression ')' statement
+: WHILE '(' expression ')' {ref_tab.push_front(map_boost());} statement
 {
-    $$ = while_then(*$3, *$5);
-    delete $3; $3 = nullptr; delete $5; $5 = nullptr;
+    $$ = while_then(*$3, *$6);
+    ref_tab.pop_front();
+    delete $3; $3 = nullptr; delete $6; $6 = nullptr;
 }
-| DO  statement  WHILE '(' expression ')'
+| DO  statement  WHILE '(' {ref_tab.push_front(map_boost());} expression ')'
 {
-    $$ = do_while(*$2, *$5);
-    delete $2; $2 = nullptr; delete $5; $5 = nullptr;
+    $$ = do_while(*$2, *$6);
+    ref_tab.pop_front();
+    delete $2; $2 = nullptr; delete $6; $6 = nullptr;
 }
 ;
 
