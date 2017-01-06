@@ -14,7 +14,7 @@ expression::expression(string s, map_list& ref_tab) : ref_tab(ref_tab) {
 			goto end;
 		}
 	}
-	end:
+end:
 
 	if (error) {
 		t = _ERROR;
@@ -80,11 +80,11 @@ expression::expression(string s, map_list& ref_tab) : ref_tab(ref_tab) {
 	}
 }
 
-expression::expression(int i, map_list& ref_tab) : ref_tab(ref_tab), t(_INT), var(new_var()) {
+expression::expression(int i, map_list& ref_tab) : ref_tab(ref_tab), t(_INT), var(-1), primary_expr(true), int_val(i) {
 	code << "  %x" << var << " = add i32 0, " << i << "\n";
 }
 
-expression::expression(double d, map_list& ref_tab) : ref_tab(ref_tab), t(_DOUBLE), var(new_var()) {
+expression::expression(double d, map_list& ref_tab) : ref_tab(ref_tab), t(_DOUBLE), var(-1), primary_expr(true), double_val(d) {
 	char* nb_double = double_to_hex_str(d);
 	code << "  %x" << var << " = fadd double 0x000000000000000, " << nb_double << "\n";
 	free(nb_double);
@@ -102,7 +102,7 @@ expression::expression(char *s, void *, map_list& ref_tab) : ref_tab(ref_tab) { 
 			goto end;
 		}
 	}
-	end:
+end:
 
 	if (error) {
 		t = _ERROR;
@@ -158,7 +158,7 @@ expression::expression(char *s, struct arg_expr_list &ael, map_list& ref_tab) : 
 			goto end;
 		}
 	}
-	end:
+end:
 
 	if (error) {
 		t = _ERROR;
@@ -223,55 +223,58 @@ expression::expression(char *s, struct arg_expr_list &ael, map_list& ref_tab) : 
 					var = -1;
 				}
 				else {
-					switch (param_type) {
-					case _INT:
-						switch (expression->getT()) {
-
+					//We don't get code of the value is immediate
+					if (!expression->getPrimaryExpr()) {
+						switch (param_type) {
 						case _INT:
-							// No conversion needed, expression has the same type as the function parameter
-							code << expression->code.str();
+							switch (expression->getT()) {
+
+							case _INT:
+								// No conversion needed, expression has the same type as the function parameter
+								code << expression->code.str();
+								break;
+
+							case _DOUBLE:
+								// Need to convert expression from double to int
+								newVar = new_var();
+								code << expression->code.str();
+								code << "  %x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
+								expression->setVar(newVar);
+								break;
+
+							default:
+								expression->setT(_ERROR);
+								break;
+							}
+
 							break;
 
 						case _DOUBLE:
-							// Need to convert expression from double to int
-							newVar = new_var();
-							code << expression->code.str();
-							code << "  %x" << newVar <<  " = fptosi double %x" << expression->getVar() << " to i32\n";
-							expression->setVar(newVar);
+
+							switch (expression->getT()) {
+							case _INT:
+								// Need to convert expression from int to double
+								newVar = new_var();
+								code << expression->code.str();
+								code << "  %x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
+								expression->setVar(newVar);
+								break;
+
+							case _DOUBLE:
+								code << expression->code.str();
+								break;
+
+							default:
+								expression->setT(_ERROR);
+								break;
+							}
+
 							break;
 
 						default:
 							expression->setT(_ERROR);
 							break;
 						}
-
-						break;
-
-					case _DOUBLE:
-
-						switch (expression->getT()) {
-						case _INT:
-							// Need to convert expression from int to double
-							newVar = new_var();
-							code << expression->code.str();
-							code << "  %x" << newVar << " = sitofp i32 %x" << expression->getVar() << " to double\n";
-							expression->setVar(newVar);
-							break;
-
-						case _DOUBLE:
-							code << expression->code.str();
-							break;
-
-						default:
-							expression->setT(_ERROR);
-							break;
-						}
-
-						break;
-
-					default:
-						expression->setT(_ERROR);
-						break;
 					}
 				}
 			}
@@ -302,15 +305,27 @@ expression::expression(char *s, struct arg_expr_list &ael, map_list& ref_tab) : 
 
 				param_type = id.paramTypes[count];
 				count++;
+				char *nb_double;
 
 				switch (param_type) {
 
 				case _INT:
-					code << "i32 %x" << expression->getVar();
+					// We can get the imediate value here
+					if (expression->getPrimaryExpr())
+						code << "i32 " << expression->getIntVal();
+					else
+						code << "i32 %x" << expression->getVar();
 					if (count < size) code << ", ";
 					break;
 
 				case _DOUBLE:
+					// We can get the imediate value here
+					if (expression->getPrimaryExpr()) {
+						nb_double = double_to_hex_str(expression->getDoubleVal());
+						code << "double " << nb_double;
+						free(nb_double);
+					}
+					else
 					code << "double %x" << expression->getVar();
 					if (count < size) code << ", ";
 					break;
@@ -343,6 +358,17 @@ map_list& expression::getHash() const  {
 	return ref_tab;
 }
 
+int expression::getIntVal() const {
+	return int_val;
+}
+
+double expression::getDoubleVal() const {
+	return double_val;
+}
+
+bool expression::getPrimaryExpr() const {
+	return primary_expr;
+}
 
 // Setters
 void expression::setVar(int var) {
@@ -379,6 +405,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
+
 		switch (e1.t) {
 
 		case _INT:
@@ -442,32 +469,310 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 	return ret;
 }
 
+// optimisation
+struct expression* optimize(const struct expression& e1, const struct expression& e2,
+							string integer_op, string double_op,
+							auto int_func, auto double_func,
+							enum simple_type integer_res = _INT, enum simple_type double_res = _DOUBLE) {
+	struct expression* ret = NULL;
+
+	// Error gestion : if used in order to avoid repetition in the switch
+	if (e1.t == _VOID || e2.t == _VOID) {
+		error_funct(_ERROR_COMPIL, "invalid use of void expression");
+		ret = new expression(_ERROR, -1, e1.ref_tab);
+	}
+	else if (e1.t == _BOOL || e2.t == _BOOL) {
+		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+		ret = new expression(_ERROR, -1, e1.ref_tab);
+	}
+	else if (e1.t == _ERROR || e2.t == _ERROR) {
+		// In this case, we consider that the expression has already an error and we don't consider others errors
+		// in order to don't flood the error output with big expressions.
+		ret = new expression(_ERROR, -1, e1.ref_tab);
+	}
+	else {
+
+		// In this case we can make a huge optimisation
+		if (e1.primary_expr && e2.primary_expr) {
+			int resi;
+			double resd;
+			switch (e1.t) {
+
+			case _INT:
+				switch (e2.t) {
+
+				case _INT:
+					// No conversion needed, both expression have the same type
+					if (integer_res != _BOOL && double_res != _BOOL) {
+						resi = int_func(e1.int_val, e2.int_val); //compute the operation
+						ret = new expression(resi, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->int_val = resi; //store it's value
+					}
+					else {
+						resi = int_func(e1.int_val, e2.int_val); //compute the operation
+						ret = new expression(integer_res, -1, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->int_val = resi; //store it's value
+					}
+					break;
+
+				case _DOUBLE:
+					// Need to convert e1 from int to double
+					if (integer_res != _BOOL && double_res != _BOOL) {
+						resd = double_func(e1.int_val, e2.double_val); //compute the operation
+						ret = new expression(resd, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->double_val = resd; //store it's value
+					}
+					else {
+						resi = double_func(e1.int_val, e2.double_val); //compute the operation
+						ret = new expression(double_res, -1, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->int_val = resi; //store it's value
+					}
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+
+				}
+				break;
+
+			case _DOUBLE:
+				switch (e2.t) {
+
+				case _INT:
+					// Need to convert e2 from int to double
+					if (integer_res != _BOOL && double_res != _BOOL) {
+						resd = double_func(e1.double_val, e2.int_val); //compute the operation
+						ret = new expression(resd, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->double_val = resd; //store it's value
+					}
+					else {
+						resi = double_func(e1.double_val, e2.int_val); //compute the operation
+						ret = new expression(double_res, -1, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->int_val = resi; //store it's value
+					}
+					break;
+
+				case _DOUBLE:
+					// No conversion needed, both expression have the same type
+					if (integer_res != _BOOL && double_res != _BOOL) {
+						resd = double_func(e1.double_val, e2.double_val); //compute the operation
+						ret = new expression(resd, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->double_val = resd; //store it's value
+					}
+					else {
+						resi = double_func(e1.double_val, e2.double_val); //compute the operation
+						ret = new expression(double_res, -1, e1.ref_tab); //store it in a new expression
+						ret->primary_expr = true; //the expression is still a primary expr
+						ret->int_val = resi; //store it's value
+					}
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+				}
+				break;
+
+			default:
+				ret = new expression(_ERROR, -1, e1.ref_tab);
+				break;
+
+			}
+		}
+
+		// In this case optimisation is smaller. We directly assign the good value to the result
+		if (e1.primary_expr && !e2.primary_expr) {
+			char* nb_double;
+			int newV;
+			switch (e1.t) {
+
+			case _INT:
+				switch (e2.t) {
+
+				case _INT:
+					// No conversion needed, both expression have the same type
+					ret = new expression(integer_res, new_var(), e1.ref_tab);
+					ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << integer_op << " i32 " << e1.int_val << ", %x" << e2.var << "\n";
+					break;
+
+				case _DOUBLE:
+					// Need to convert e1 from int to double
+					nb_double = double_to_hex_str(e1.int_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double " << nb_double << ", %x" << e2.var << "\n";
+					free(nb_double);
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+
+				}
+				break;
+
+			case _DOUBLE:
+				switch (e2.t) {
+
+				case _INT:
+					// Need to convert e2 from int to double
+					newV = new_var();
+					nb_double = double_to_hex_str(e1.double_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e2.code.str();
+					ret->code << "  %x" << newV << " = sitofp i32 %x" << e2.var << " to double\n";
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double " << nb_double << ", %x" << newV << "\n";
+					free(nb_double);
+					break;
+
+				case _DOUBLE:
+					// No conversion needed, both expression have the same type
+					nb_double = double_to_hex_str(e1.double_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double " << nb_double << ", %x" << e2.var << "\n";
+					free(nb_double);
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+				}
+				break;
+
+			default:
+				ret = new expression(_ERROR, -1, e1.ref_tab);
+				break;
+
+			}
+		}
+
+		// In this case optimisation is smaller. We directly assign the good value to the result
+		if (!e1.primary_expr && e2.primary_expr) {
+			char* nb_double;
+			int newV;
+			switch (e1.t) {
+
+			case _INT:
+				switch (e2.t) {
+
+				case _INT:
+					// No conversion needed, both expression have the same type
+					ret = new expression(integer_res, new_var(), e1.ref_tab);
+					ret->code << e1.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << integer_op << " i32 %x" << e1.var << ", " << e2.int_val << "\n";
+					break;
+
+				case _DOUBLE:
+					// Need to convert e1 from int to double
+					newV = new_var();
+					nb_double = double_to_hex_str(e2.double_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e1.code.str();
+					ret->code << "  %x" << newV << " = sitofp i32 %x" << e1.var << " to double\n";
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << newV << ", " << nb_double << "\n";
+					free(nb_double);
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+
+				}
+				break;
+
+			case _DOUBLE:
+				switch (e2.t) {
+
+				case _INT:
+					// Need to convert e2 from int to double
+					nb_double = double_to_hex_str(e2.int_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e1.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", " << nb_double << "\n";
+					free(nb_double);
+					break;
+
+				case _DOUBLE:
+					// No conversion needed, both expression have the same type
+					nb_double = double_to_hex_str(e2.double_val);
+					ret = new expression(double_res, new_var(), e1.ref_tab);
+					ret->code << e1.code.str();
+					ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", " << nb_double << "\n";
+					free(nb_double);
+					break;
+
+				default:
+					ret = new expression(_ERROR, -1, e1.ref_tab);
+					break;
+				}
+				break;
+
+			default:
+				ret = new expression(_ERROR, -1, e1.ref_tab);
+				break;
+
+			}
+		}
+
+
+	}
+	return ret;
+}
+
 // Code generation for basics operations between expressions
 struct expression* operator+(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "add", "fadd", _INT, _DOUBLE);
+	struct expression* ret = optimize(e1, e2, "add", "fadd", [] (int i1, int i2) {return i1 + i2;}, [] (double i1, double i2) {return i1 + i2;});
+	if (ret == NULL)
+		return binary_operator(e1, e2, "add", "fadd", _INT, _DOUBLE);
+	else
+		return ret;
 }
 
 struct expression* operator-(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "sub", "fsub", _INT, _DOUBLE);
+	struct expression* ret = optimize(e1, e2, "sub", "fsub", [] (int i1, int i2) {return i1 - i2;}, [] (double i1, double i2) {return i1 - i2;});
+	if (ret == NULL)
+		return binary_operator(e1, e2, "sub", "fsub", _INT, _DOUBLE);
+	else
+		return ret;
 }
 
 struct expression* operator*(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "mul", "fmul", _INT, _DOUBLE);
+	struct expression* ret = optimize(e1, e2, "mul", "fmul", [] (int i1, int i2) {return i1 * i2;}, [] (double i1, double i2) {return i1 * i2;});
+	if (ret == NULL)
+		return binary_operator(e1, e2, "mul", "fmul", _INT, _DOUBLE);
+	else
+		return ret;
 }
 
 struct expression* operator/(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "sdiv", "fdiv", _INT, _DOUBLE);
+	struct expression* ret = optimize(e1, e2, "sdiv", "fdiv", [] (int i1, int i2) {return i1 / i2;}, [] (double i1, double i2) {return i1 / i2;});
+	if (ret == NULL)
+		return binary_operator(e1, e2, "sdiv", "fdiv", _INT, _DOUBLE);
+	else
+		return ret;
 }
 
 struct expression* operator%(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "srem", "frem", _INT, _DOUBLE);
+	struct expression* ret = optimize(e1, e2, "srem", "frem", [] (int i1, int i2) {return i1 % i2;}, [] (double i1, double i2) {return fmod(i1, i2);});
+	if (ret == NULL)
+		return binary_operator(e1, e2, "srem", "frem", _INT, _DOUBLE);
+	else
+		return ret;
 }
 
 
-
 struct expression* operator<<(const struct expression& e1, const struct expression& e2) {
-	//This operation is only permitted if e1 is an integers.
-	//We allow implicit conversion for e2 from double to int
+	//This operation is only permitted if e1 and e2 are integers.
 	struct expression* ret;
 
 	// Error gestion : if used in order to avoid repetition in the switch
@@ -485,25 +790,42 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
-		int conversion;
+		int resi;
 		switch (e1.t) {
 		case _INT:
 
 			switch (e2.t) {
 
 			case _INT:
-				ret = new expression(_INT, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << e2.var << "\n";
+				//in this case we can diretcly compute the value
+				cerr << e1.primary_expr << e2.primary_expr << endl;
+				if (e1.primary_expr && e2.primary_expr){
+					resi = e1.int_val << e2.int_val;
+					ret = new expression(_INT, -1, e1.ref_tab); //store it in a new expression
+					ret->primary_expr = true; //the expression is still a primary expr
+					ret->int_val = resi; //store it's value
+				}
+				else {
+					ret = new expression(_INT, new_var(), e1.ref_tab);
+					if (!e1.primary_expr) ret->code << e1.code.str();
+					if (!e2.primary_expr) ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = shl i32 ";
+					if (e1.primary_expr)
+						ret->code << e1.int_val;
+					else
+						ret->code << "%x" << e1.var;
+					ret->code << ", ";
+					if (e2.primary_expr)
+						ret->code << e2.int_val;
+					else
+						ret->code << "%x" << e2.var;
+					ret->code << "\n";
+				}
 				break;
 
 			case _DOUBLE:
-				// Need to convert e2 from double to int
-				conversion = new_var();
-				ret = new expression(_INT, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
-				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << conversion << "\n";
+				error_funct(_ERROR_COMPIL, "SHL operation canno't be applied to a double expression");
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 
 			default:
@@ -546,25 +868,42 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
-		int conversion;
+		int resi;
 		switch (e1.t) {
 		case _INT:
 
 			switch (e2.t) {
 
 			case _INT:
-				ret = new expression(_INT, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << e2.var << "\n";
+				//in this case we can diretcly compute the value
+				if (e1.primary_expr && e2.primary_expr){
+					resi = e1.int_val >> e2.int_val;
+					ret = new expression(_INT, -1, e1.ref_tab); //store it in a new expression
+					ret->primary_expr = true; //the expression is still a primary expr
+					ret->int_val = resi; //store it's value
+				}
+				else {
+					ret = new expression(_INT, new_var(), e1.ref_tab);
+					if (!e1.primary_expr) ret->code << e1.code.str();
+					if (!e2.primary_expr) ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = ashr i32 ";
+					if (e1.primary_expr)
+						ret->code << e1.int_val;
+					else
+						ret->code << "%x" << e1.var;
+					ret->code << ", ";
+					if (e2.primary_expr)
+						ret->code << e2.int_val;
+					else
+						ret->code << "%x" << e2.var;
+					ret->code << "\n";
+				}
 				break;
 
 			case _DOUBLE:
-				// Need to convert e2 from double to int
-				conversion = new_var();
-				ret = new expression(_INT, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
-				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << conversion << "\n";
+				error_funct(_ERROR_COMPIL, "SHL operation canno't be applied to a double expression");
+				ret = new expression(_ERROR, -1, e1.ref_tab);
+
 				break;
 
 			default:
@@ -600,7 +939,7 @@ struct expression* expression::operator=(string s) {
 			goto end;
 		}
 	}
-	end:
+end:
 
 	if (error) {
 		ret = new expression(_ERROR, -1, ref_tab);
@@ -634,64 +973,127 @@ struct expression* expression::operator=(string s) {
 				ret = new expression(_ERROR, -1, ref_tab);
 			}
 			else {
-				switch (id.t) {
 
-				case _INT:
-					switch (t) {
+				// Optimisation if the expression has a simple value
+				if (primary_expr) {
+
+					char* nb_double;
+					switch (id.t) {
 
 					case _INT:
-						// No conversion needed
-						ret = new expression(_INT, var, ref_tab);
-						ret->code << code.str();
-						ret->code << "  store i32 %x" << var << ", i32* " << id.name << "\n";
+						switch (t) {
+
+						case _INT:
+							// No conversion needed
+							ret = new expression(_INT, var, ref_tab);
+							ret->code << "  store i32 " << int_val << ", i32* " << id.name << "\n";
+							break;
+
+						case _DOUBLE:
+							// Need to convert expression from double to int
+							ret = new expression(_INT, var, ref_tab);
+							ret->code << "  store i32 " << (int) double_val << ", i32* " << id.name << "\n";
+							break;
+
+						default:
+							ret = new expression(_ERROR, -1, ref_tab);
+							break;
+
+						}
 						break;
 
 					case _DOUBLE:
-						// Need to convert expression from double to int
-						newVar = new_var();
-						ret = new expression(_INT, newVar, ref_tab);
-						ret->code << code.str();
-						ret->code << "  %x" << newVar <<  " = fptosi double %x" << var << " to i32\n";
-						ret->code << "  store i32 %x" << newVar << ", i32* " << id.name << "\n";
-						break;
+						switch (t) {
 
-					default:
-						t = _ERROR;
-						var = -1;
-						break;
+						case _INT:
+							// Need to convert expression from int to double
+							nb_double = double_to_hex_str(int_val);
+							ret = new expression(_DOUBLE, var, ref_tab);
+							ret->code << "  store double " << nb_double << ", double* " << id.name << "\n";
+							free(nb_double);
+							break;
 
-					}
-					break;
+						case _DOUBLE:
+							// No conversion needed
+							nb_double = double_to_hex_str(double_val);
+							ret = new expression(_DOUBLE, var, ref_tab);
+							ret->code << "  store double " << nb_double << ", double* " << id.name << "\n";
+							free(nb_double);
+							break;
 
-				case _DOUBLE:
-					switch (t) {
-					case _INT:
-						// Need to convert expression from int to double
-						newVar = new_var();
-						ret = new expression(_DOUBLE, newVar, ref_tab);
-						ret->code << code.str();
-						ret->code << "  %x" << newVar << " = sitofp i32 %x" << var << " to double\n";
-						ret->code << "  store double %x" << newVar << ", double* " << id.name << "\n";
-						break;
+						default:
+							ret = new expression(_ERROR, -1, ref_tab);
+							break;
 
-					case _DOUBLE:
-						// No conversion needed
-						ret = new expression(_DOUBLE, var, ref_tab);
-						ret->code << code.str();
-						ret->code << "  store double %x" << var << ", double* " << id.name << "\n";
+						}
 						break;
 
 					default:
 						ret = new expression(_ERROR, -1, ref_tab);
 						break;
-
 					}
-					break;
 
-				default:
-					t = _ERROR;
-					var = -1;
-					break;
+
+
+				}
+				else {
+					switch (id.t) {
+
+					case _INT:
+						switch (t) {
+
+						case _INT:
+							// No conversion needed
+							ret = new expression(_INT, var, ref_tab);
+							ret->code << code.str();
+							ret->code << "  store i32 %x" << var << ", i32* " << id.name << "\n";
+							break;
+
+						case _DOUBLE:
+							// Need to convert expression from double to int
+							newVar = new_var();
+							ret = new expression(_INT, newVar, ref_tab);
+							ret->code << code.str();
+							ret->code << "  %x" << newVar <<  " = fptosi double %x" << var << " to i32\n";
+							ret->code << "  store i32 %x" << newVar << ", i32* " << id.name << "\n";
+							break;
+
+						default:
+							ret = new expression(_ERROR, -1, ref_tab);
+							break;
+
+						}
+						break;
+
+					case _DOUBLE:
+						switch (t) {
+						case _INT:
+							// Need to convert expression from int to double
+							newVar = new_var();
+							ret = new expression(_DOUBLE, newVar, ref_tab);
+							ret->code << code.str();
+							ret->code << "  %x" << newVar << " = sitofp i32 %x" << var << " to double\n";
+							ret->code << "  store double %x" << newVar << ", double* " << id.name << "\n";
+							break;
+
+						case _DOUBLE:
+							// No conversion needed
+							ret = new expression(_DOUBLE, var, ref_tab);
+							ret->code << code.str();
+							ret->code << "  store double %x" << var << ", double* " << id.name << "\n";
+							break;
+
+						default:
+							ret = new expression(_ERROR, -1, ref_tab);
+							break;
+
+						}
+						break;
+
+					default:
+						ret = new expression(_ERROR, -1, ref_tab);
+						break;
+					}
 				}
 			}
 		}
@@ -765,27 +1167,69 @@ struct expression* expression::operator>>=(string s) {
 
 // Code generation for conditionals expression
 struct expression* operator==(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp eq", "fcmp oeq", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp eq", "fcmp oeq",
+									  [] (int i1, int i2) {if (i1 == i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 == i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp eq", "fcmp oeq", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 struct expression* operator!=(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp ne", "fcmp one", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp ne", "fcmp one",
+									  [] (int i1, int i2) {if (i1 != i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 != i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp ne", "fcmp one", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 struct expression* operator<(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp slt", "fcmp olt", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp slt", "fcmp olt",
+									  [] (int i1, int i2) {if (i1 < i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 < i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp slt", "fcmp olt", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 struct expression* operator>(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp sgt", "fcmp ogt", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp sgt", "fcmp ogt",
+									  [] (int i1, int i2) {if (i1 > i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 > i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp sgt", "fcmp ogt", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 struct expression* operator<=(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp sle", "fcmp ole", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp sle", "fcmp ole",
+									  [] (int i1, int i2) {if (i1 <= i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 <= i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp sle", "fcmp ole", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 struct expression* operator>=(const struct expression& e1, const struct expression& e2) {
-	return binary_operator(e1, e2, "icmp sge", "fcmp oge", _BOOL, _BOOL);
+	struct expression* ret = optimize(e1, e2, "icmp sge", "fcmp oge",
+									  [] (int i1, int i2) {if (i1 >= i2) return 1; else return 0;},
+	[] (double i1, double i2) {if (i1 >= i2) return 1; else return 0;},
+	_BOOL, _BOOL);
+	if (ret == NULL)
+		return binary_operator(e1, e2, "icmp sge", "fcmp oge", _BOOL, _BOOL);
+	else
+		return ret;
 }
 
 
@@ -808,15 +1252,38 @@ struct expression* operator&&(const struct expression& e1, const struct expressi
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
+		int resi;
 		switch (e1.t) {
 		case _BOOL:
 
 			switch (e2.t) {
 
 			case _BOOL:
-				ret = new expression(_BOOL, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << ret->getVar() << " = and i1 %x" << e1.var << ", %x" << e2.var << "\n";
+
+				//in this case we can diretcly compute the value
+				if (e1.primary_expr && e2.primary_expr){
+					if (e1.int_val == 1 && e2.int_val == 1) resi = 1;
+					else resi = 0;
+					ret = new expression(_BOOL, -1, e1.ref_tab); //store it in a new expression
+					ret->primary_expr = true; //the expression is still a primary expr
+					ret->int_val = resi; //store it's value
+				}
+				else {
+					ret = new expression(_BOOL, new_var(), e1.ref_tab);
+					if (!e1.primary_expr) ret->code << e1.code.str();
+					if (!e2.primary_expr) ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = and i1 ";
+					if (e1.primary_expr)
+						ret->code << e1.int_val;
+					else
+						ret->code << "%x" << e1.var;
+					ret->code << ", ";
+					if (e2.primary_expr)
+						ret->code << e2.int_val;
+					else
+						ret->code << "%x" << e2.var;
+					ret->code << "\n";
+				}
 				break;
 
 			default:
@@ -852,15 +1319,37 @@ struct expression* operator||(const struct expression& e1, const struct expressi
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
+		int resi;
 		switch (e1.t) {
 		case _BOOL:
 
 			switch (e2.t) {
 
 			case _BOOL:
-				ret = new expression(_BOOL, new_var(), e1.ref_tab);
-				ret->code << e1.code.str() << e2.code.str();
-				ret->code << "%x" << ret->getVar() << " = or i1 %x" << e1.var << ", %x" << e2.var << "\n";
+				//in this case we can diretcly compute the value
+				if (e1.primary_expr && e2.primary_expr){
+					if (e1.int_val == 1 || e2.int_val == 1) resi = 1;
+					else resi = 0;
+					ret = new expression(_BOOL, -1, e1.ref_tab); //store it in a new expression
+					ret->primary_expr = true; //the expression is still a primary expr
+					ret->int_val = resi; //store it's value
+				}
+				else {
+					ret = new expression(_BOOL, new_var(), e1.ref_tab);
+					if (!e1.primary_expr) ret->code << e1.code.str();
+					if (!e2.primary_expr) ret->code << e2.code.str();
+					ret->code << "  %x" << ret->getVar() << " = or i1 ";
+					if (e1.primary_expr)
+						ret->code << e1.int_val;
+					else
+						ret->code << "%x" << e1.var;
+					ret->code << ", ";
+					if (e2.primary_expr)
+						ret->code << e2.int_val;
+					else
+						ret->code << "%x" << e2.var;
+					ret->code << "\n";
+				}
 				break;
 
 			default:
@@ -896,11 +1385,22 @@ struct expression* operator!(const struct expression& e1) { // ! is equivalent t
 		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
+		int resi;
 		switch (e1.t) {
 		case _BOOL:
-			ret = new expression(_BOOL, new_var(), e1.ref_tab);
-			ret->code << e1.code.str();
-			ret->code << "%x" << ret->getVar() << " = xor i1 %x" << e1.var << ", 1\n";
+			//in this case we can diretcly compute the value
+			if (e1.primary_expr){
+				if (e1.int_val == 1) resi = 0;
+				else resi = 1;
+				ret = new expression(_BOOL, -1, e1.ref_tab); //store it in a new expression
+				ret->primary_expr = true; //the expression is still a primary expr
+				ret->int_val = resi; //store it's value
+			}
+			else {
+				ret = new expression(_BOOL, new_var(), e1.ref_tab);
+				ret->code << e1.code.str();
+				ret->code << "  %x" << ret->getVar() << " = xor i1 %x" << e1.var << ", 1\n";
+			}
 			break;
 
 		default:
@@ -1104,40 +1604,86 @@ struct expression *decr_prefix(string name, map_list &ref_tab) {
 struct expression *opposite(const struct expression &e1){
 	struct expression *ret;
 
-	switch (e1.getT()) {
-	case _INT:
-		ret = new expression(_INT, new_var(), e1.ref_tab);
-		ret->code << e1.code.str();
-		ret->code << "  %x" << ret->getVar() << " = sub i32 0, %x" << e1.getVar() << "\n";
-		break;
 
-	case _DOUBLE:
-		ret = new expression(_DOUBLE, new_var(), e1.ref_tab);
-		ret->code << e1.code.str();
-		ret->code << "  %x" << ret->getVar() << " = fsub double 0x000000000000000, %x" << e1.getVar() << "\n";
-		break;
 
-	case _VOID:
-		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.ref_tab);
-		break;
+	// we can optimize if e1 has a direct value
+	if (e1.primary_expr) {
+		int resi;
+		double resd;
+		switch (e1.getT()) {
+		case _INT:
+			resi = - e1.int_val;
+			ret = new expression(resi, e1.ref_tab); //store result
+			ret->primary_expr = true; //the expression is still a primary expr
+			ret->int_val = resi; //store it's value
+			break;
 
-	case _BOOL:
-		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, e1.ref_tab);
-		break;
+		case _DOUBLE:
+			resd = - e1.double_val;
+			ret = new expression(resd, e1.ref_tab); //store result
+			ret->primary_expr = true; //the expression is still a primary expr
+			ret->int_val = resd; //store it's value
+			break;
 
-	case _ERROR:
-		// In this case, we consider that the expression has already an error and we don't consider others errors
-		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.ref_tab);
-		break;
+		case _VOID:
+			error_funct(_ERROR_COMPIL, "invalid use of void expression");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
 
-	default:
-		// If you see this something really goes wrong withe the compiler
-		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, e1.ref_tab);
-		break;
+		case _BOOL:
+			error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+
+		case _ERROR:
+			// In this case, we consider that the expression has already an error and we don't consider others errors
+			// in order to don't flood the error output with big expressions.
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+
+		default:
+			// If you see this something really goes wrong withe the compiler
+			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+		}
+	}
+	else {
+		switch (e1.getT()) {
+		case _INT:
+			ret = new expression(_INT, new_var(), e1.ref_tab);
+			ret->code << e1.code.str();
+			ret->code << "  %x" << ret->getVar() << " = sub i32 0, %x" << e1.getVar() << "\n";
+			break;
+
+		case _DOUBLE:
+			ret = new expression(_DOUBLE, new_var(), e1.ref_tab);
+			ret->code << e1.code.str();
+			ret->code << "  %x" << ret->getVar() << " = fsub double 0x000000000000000, %x" << e1.getVar() << "\n";
+			break;
+
+		case _VOID:
+			error_funct(_ERROR_COMPIL, "invalid use of void expression");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+
+		case _BOOL:
+			error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+
+		case _ERROR:
+			// In this case, we consider that the expression has already an error and we don't consider others errors
+			// in order to don't flood the error output with big expressions.
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+
+		default:
+			// If you see this something really goes wrong withe the compiler
+			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
+			ret = new expression(_ERROR, -1, e1.ref_tab);
+			break;
+		}
 	}
 	return ret;
 }

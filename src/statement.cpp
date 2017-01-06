@@ -9,12 +9,22 @@ struct code_container* if_then_else(const struct expression& e1,
 	switch (e1.getT()) {
 
 	case _BOOL:
-		l1 = new_label();
-		l2 = new_label();
-		ret->code << e1.code.str(); //Compute the expression
-		ret->code << "  br i1 %x" << e1.getVar() << ", label %label" << l1 << ", label %label" << l2 << "\n"; //jump command
-		ret->code << "\nlabel" << l1 << ": ; if.then\n" << s1.code.str() << "  br label %label" << l2 << "\n" ; //then command
-		ret->code << "\nlabel" << l2 << ": ; if.end\n"; //ifend command
+		// In this case we already know wich code will be executed
+		if (e1.getPrimaryExpr()) {
+			//code executed
+			if (e1.getIntVal() == 1) {
+				ret->code << s1.code.str();
+			}
+			// else we don't execute any code
+		}
+		else {
+			l1 = new_label();
+			l2 = new_label();
+			ret->code << e1.code.str(); //Compute the expression
+			ret->code << "  br i1 %x" << e1.getVar() << ", label %label" << l1 << ", label %label" << l2 << "\n"; //jump command
+			ret->code << "\nlabel" << l1 << ": ; if.then\n" << s1.code.str() << "  br label %label" << l2 << "\n" ; //then command
+			ret->code << "\nlabel" << l2 << ": ; if.end\n"; //ifend command
+		}
 		break;
 
 	case _INT:
@@ -52,14 +62,26 @@ struct code_container* if_then_else(const struct expression& e1,
 
 	switch (e1.getT()) {
 	case _BOOL:
-		l1 = new_label();
-		l2 = new_label();
-		l3 = new_label();
-		ret->code << e1.code.str(); //Compute the expression
-		ret->code << "  br i1 %x" << e1.getVar() << ", label %label" << l1 << ", label %label" << l2 << "\n"; //jump command
-		ret->code << "\nlabel" << l1 << ": ; if.then\n" << s1.code.str() << "  br label %label" << l3 << "\n" ; //then command
-		ret->code << "\nlabel" << l2 << ": ; if.else\n" << s2.code.str() << "  br label %label" << l3 << "\n" ; //else command
-		ret->code << "\nlabel" << l3 << ": ; if.end\n"; //ifend command
+		// In this case we already know wich code will be executed
+		if (e1.getPrimaryExpr()) {
+			//code executed
+			if (e1.getIntVal() == 1) {
+				ret->code << s1.code.str();
+			}
+			else {
+				ret->code << s2.code.str();
+			}
+		}
+		else {
+			l1 = new_label();
+			l2 = new_label();
+			l3 = new_label();
+			ret->code << e1.code.str(); //Compute the expression
+			ret->code << "  br i1 %x" << e1.getVar() << ", label %label" << l1 << ", label %label" << l2 << "\n"; //jump command
+			ret->code << "\nlabel" << l1 << ": ; if.then\n" << s1.code.str() << "  br label %label" << l3 << "\n" ; //then command
+			ret->code << "\nlabel" << l2 << ": ; if.else\n" << s2.code.str() << "  br label %label" << l3 << "\n" ; //else command
+			ret->code << "\nlabel" << l3 << ": ; if.end\n"; //ifend command
+		}
 		break;
 
 	case _INT:
@@ -667,16 +689,35 @@ struct code_container* global_declaration(enum simple_type t, struct declaration
 struct code_container *return_statement(struct expression& e1) {
 	struct code_container *ret = new code_container();
 	ret->has_return = true;
-	ret->code << e1.code.str();
-	ret->code << "  ret ";
+	char *nb_double;
 	switch (e1.getT()) {
 
 	case _INT:
-		ret->code << "i32 %x" << e1.getVar() << "\n";
+		// imediate return if possible
+		if (e1.getPrimaryExpr()) {
+			ret->code << "  ret ";
+			ret->code << "i32 " << e1.getIntVal() << "\n";
+		}
+		else {
+			ret->code << e1.code.str();
+			ret->code << "  ret ";
+			ret->code << "i32 %x" << e1.getVar() << "\n";
+		}
 		break;
 
 	case _DOUBLE:
-		ret->code << "double %x" << e1.getVar() << "\n";
+
+		if (e1.getPrimaryExpr()) {
+			nb_double = double_to_hex_str(e1.getDoubleVal());
+			ret->code << "  ret ";
+			ret->code << "double " << nb_double << "\n";
+			free(nb_double);
+		}
+		else {
+			ret->code << e1.code.str();
+			ret->code << "  ret ";
+			ret->code << "double %x" << e1.getVar() << "\n";
+		}
 		break;
 
 	case _VOID:
@@ -702,71 +743,6 @@ struct code_container *return_statement(struct expression& e1) {
 
 
 // Function definition
-struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_list &ref_tab) {
-	struct code_container *ret = new code_container();
-
-	// ajout dans la table la plus imbriqué
-	map_boost& hash_table = ref_tab.front();
-
-	if (hash_table.find(name) != hash_table.end()) {
-		error_funct(_ERROR_COMPIL, "redeclaration of ", name);
-	}
-	else {
-
-		ret->code << "define ";
-		switch (t) {
-
-		case _INT:
-			ret->code << "i32 ";
-			break;
-
-		case _DOUBLE:
-			ret->code << "double ";
-			break;
-
-		case _VOID:
-			ret->code << "void ";
-			break;
-
-		case _BOOL:
-			error_funct(_ERROR_COMPIL, "A function canno't return a boolean");
-			break;
-
-		case _ERROR:
-			// In this case, we consider that the expression has already an error and we don't consider others errors
-			// in order to don't flood the error output with big expressions.
-			break;
-
-		default:
-			// If you see this something really goes wrong withe the compiler
-			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-			break;
-
-		}
-
-		ret->code << "@" << name << " (" << decla->code.str() << ")\n" << "{\n";
-		add_identifier(decla->idList, ret->code);
-		ret->code << code->code.str();
-
-		if (t != _VOID && code->has_return == false)
-			error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
-		if (t == _VOID && code->has_return == false)
-			ret->code << "  ret void\n";
-
-		ret->code << "}\n\n";
-
-		// add function name to the hash table
-		struct identifier id;
-		id.t = t;
-		id.name = "@" + name;
-		id.symbolType = _FUNCTION;
-		BOOST_FOREACH(identifier id_old, decla->idList) {
-			id.paramTypes.push_back(id_old.t);
-		}
-		hash_table[name] = id;
-	}
-	return ret;
-}
 
 struct code_container *define_funct(enum simple_type t, string name, map_list &ref_tab) {
 	struct code_container *ret = new code_container();

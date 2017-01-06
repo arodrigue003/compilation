@@ -77,4 +77,3 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/test16.c ${CMAKE_CURRENT_BINARY_DIR}/
 add_test(NAME test16 COMMAND parser test16.c) #compilation test with our compiler
 add_test(NAME test16-clang COMMAND clang test16.ll -o test16) #compilation test with clang
 add_test(NAME test16-exe COMMAND ./test16) #execution test
-

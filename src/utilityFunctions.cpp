@@ -146,37 +146,11 @@ void add_identifier(vector<identifier> &to_store, stringstream& ss) {
 		switch (id_old.t) {
 		case _INT:
 			ss << "  " << id_old.name << " = alloca i32\n";
-			break;
-
-		case _DOUBLE:
-			ss << "  " << id_old.name << " = alloca double\n";
-			break;
-
-		case _VOID:
-			error_funct(_ERROR_COMPIL, "Invalid use of void expression");
-			break;
-
-		case _BOOL:
-			error_funct(_ERROR_COMPIL, "Invalid use of boolean expression");
-			break;
-
-		case _ERROR:
-			// In this case, we consider that the expression has already an error and we don't consider others errors
-			// in order to don't flood the error output with big expressions.
-			break;
-
-		default:
-			// If you see this something really goes wrong withe the compiler
-			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-			break;
-		}
-
-		switch (id_old.t) {
-		case _INT:
 			ss << "  store i32 %x" << id_old.register_no << ", i32* " << id_old.name << "\n";
 			break;
 
 		case _DOUBLE:
+			ss << "  " << id_old.name << " = alloca double\n";
 			ss << "  store double %x" << id_old.register_no << ", double* " << id_old.name << "\n";
 			break;
 
@@ -198,6 +172,7 @@ void add_identifier(vector<identifier> &to_store, stringstream& ss) {
 			error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
 			break;
 		}
+
 	}
 }
 

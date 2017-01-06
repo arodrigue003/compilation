@@ -34,7 +34,6 @@ struct code_container* global_declaration(enum simple_type t, struct declaration
 struct code_container *return_statement(struct expression& e1);
 
 // Function definition
-struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_list &ref_tab);
 struct code_container *define_funct(enum simple_type t, string name, map_list &ref_tab);
 
 #endif // STATEMENT_HPP

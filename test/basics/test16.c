@@ -1,15 +1,7 @@
-int main(int argc) {
-	if (argc==1) {
-		int i;
-		i = 0;
-		return i;
-	}
+// Test d'optimisation
+int main() {
+	int i;
+	i = (1 + 2 + 3 + 5.0 * 17);
 
-	if (argc == 1) {
-		int i;
-		i = 0;
-		return i;
-	}
-
-	return 0;
+	return i - 91;
 }

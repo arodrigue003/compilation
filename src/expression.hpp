@@ -8,6 +8,9 @@ private:
 	map_list& ref_tab;
 	enum simple_type t;
 	int var;
+	bool primary_expr = false;
+	int int_val;
+	double double_val;
 
 public:
 
@@ -27,6 +30,9 @@ public:
 	simple_type getT() const;
 	int getVar() const;
 	map_list& getHash() const;
+	int getIntVal() const;
+	double getDoubleVal() const;
+	bool getPrimaryExpr() const;
 
 	// Settes
 	void setVar(int var);
@@ -36,6 +42,12 @@ public:
 	friend struct expression* binary_operator(const struct expression& e1, const struct expression& e2,
 											  string integer_op, string double_op,
 											  enum simple_type integer_res, enum simple_type double_res);
+
+	// optimisation
+	friend struct expression* optimize(const struct expression& e1, const struct expression& e2,
+									   string integer_op, string double_op,
+									   auto int_func, auto double_func,
+									   enum simple_type integer_res = _INT, enum simple_type double_res = _DOUBLE);
 
 	// Code generation for binary operators
 	friend struct expression* operator+(const struct expression& e1, const struct expression& e2);

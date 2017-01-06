@@ -758,7 +758,7 @@ function_definition
 compound_statement
 {
     $$ = $<c>6;
-    $$->code << $4->code.str() << ")\n" << "{\n";
+    $$->code << $4->code.str() << ") {\n";
     add_identifier($4->idList, $$->code);
     $$->code << $7->code.str();
 
@@ -780,7 +780,7 @@ compound_statement
 compound_statement
 {
     $$ = $<c>5;
-    $$->code << ")\n" << "{\n" << $6->code.str();
+    $$->code << ") {\n" << $6->code.str();
 
     if ($1 != _VOID && $6->has_return == false)
         error_funct(_ERROR_COMPIL, "control reaches end of non-void function");
