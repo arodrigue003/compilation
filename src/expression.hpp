@@ -5,28 +5,28 @@
 
 struct expression : public code_container {
 private:
-	map_boost& hash_table;
+	map_list& ref_tab;
 	enum simple_type t;
 	int var;
 
 public:
 
 	// primary expression creation
-	expression(string s, map_boost& hash);
-	expression(int i, map_boost& hash);
-	expression(double d, map_boost& hash);
-	expression(simple_type t, int var, map_boost& hash);
+	expression(string s, map_list& ref_tab);
+	expression(int i, map_list& ref_tab);
+	expression(double d, map_list& ref_tab);
+	expression(simple_type t, int var, map_list& ref_tab);
 
 	// Function call
-	expression(char *s, void *, map_boost &hash);
-	expression(char *s, struct arg_expr_list &ael, map_boost &hash);
+	expression(char *s, void *, map_list& ref_tab);
+	expression(char *s, struct arg_expr_list &ael, map_list& ref_tab);
 
 	virtual ~expression();
 
 	// Getters
 	simple_type getT() const;
 	int getVar() const;
-	map_boost& getHash() const;
+	map_list& getHash() const;
 
 	// Settes
 	void setVar(int var);
@@ -74,14 +74,16 @@ public:
 
 
 // unary operators expressions
-struct expression *incr_postfix(string name, map_boost &hash_table);
-struct expression *decr_postfix(string name, map_boost &hash_table);
-struct expression *incr_prefix(string name, map_boost &hash_table);
-struct expression *decr_prefix(string name, map_boost &hash_table);
+struct expression *incr_postfix(string name, map_list &ref_tab);
+struct expression *decr_postfix(string name, map_list &ref_tab);
+struct expression *incr_prefix(string name, map_list &ref_tab);
+struct expression *decr_prefix(string name, map_list &ref_tab);
 struct expression *opposite(const struct expression &e1);
 
 struct arg_expr_list{
 	vector<expression *> codeV;
 };
+
+
 
 #endif // EXPRESSION_HPP

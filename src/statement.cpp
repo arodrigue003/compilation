@@ -475,10 +475,12 @@ struct code_container* do_while(const struct code_container& s1,
 
 
 // used for function declaration
-struct code_container* declare_funct(enum simple_type t, string name, map_boost &hash_table){
+struct code_container* declare_funct(enum simple_type t, string name, map_list &ref_tab){
 	struct code_container *ret = new code_container();
 	struct identifier id;
 
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 	id.symbolType = _FUNCTION;
 
 	ret->code << "declare ";
@@ -504,10 +506,12 @@ struct code_container* declare_funct(enum simple_type t, string name, map_boost 
 	return ret;
 }
 
-struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_boost &hash_table) {
+struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
 	struct identifier id;
 
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 	id.symbolType = _FUNCTION;
 
 	ret->code << "declare ";
@@ -562,8 +566,11 @@ struct code_container* declare_funct(enum simple_type t, string name, struct typ
 
 
 // declaration
-struct code_container* local_declaration(enum simple_type t, struct declaration_list &decla, map_boost &hash_table) {
+struct code_container* local_declaration(enum simple_type t, struct declaration_list &decla, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 
 	struct identifier id; // will be use to insert it in the hash_table
 	BOOST_FOREACH(identifier id_old, decla.idList) {
@@ -613,8 +620,11 @@ struct code_container* local_declaration(enum simple_type t, struct declaration_
 }
 
 // declaration
-struct code_container* global_declaration(enum simple_type t, struct declaration_list &decla, map_boost &hash_table) {
+struct code_container* global_declaration(enum simple_type t, struct declaration_list &decla, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 
 	struct identifier id; // will be use to insert it in the hash_table
 	BOOST_FOREACH(identifier id_old, decla.idList) {
@@ -703,8 +713,12 @@ struct code_container *return_statement(struct expression& e1) {
 
 
 // Function definition
-struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_boost &hash_table) {
+struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
+
 	if (hash_table.find(name) != hash_table.end()) {
 		error_funct(_ERROR_COMPIL, "redeclaration of ", name);
 	}
@@ -765,8 +779,12 @@ struct code_container *define_funct(enum simple_type t, string name, struct decl
 	return ret;
 }
 
-struct code_container *define_funct(enum simple_type t, string name, struct code_container *code, map_boost &hash_table) {
+struct code_container *define_funct(enum simple_type t, string name, struct code_container *code, map_list &ref_tab) {
 	struct code_container *ret = new code_container();
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
+
 	if (hash_table.find(name) != hash_table.end()) {
 		error_funct(_ERROR_COMPIL, "redeclaration of ", name);
 	}

@@ -4,11 +4,14 @@
 
 #include "utilityFunctions.hpp"
 
-declaration_list::declaration_list(enum simple_type t, string name, map_boost &hash_table) {
+declaration_list::declaration_list(enum simple_type t, string name, map_list &ref_tab) {
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 
 	if (hash_table.find(name) != hash_table.end()) {
 		// We don't let redifinition of an identifier occur
-		error_funct(_ERROR_COMPIL, "redeclaration ", name);
+		error_funct(_ERROR_COMPIL, "redeclaration of ", name);
 		return ;
 	}
 
@@ -230,8 +233,11 @@ void setup_p5(map_boost &hash) {
 
 
 // used for function declaration
-struct code_container* declare_q5_used_functions(map_boost &hash_table) {
+struct code_container* declare_q5_used_functions(map_list &ref_tab) {
 	struct code_container *ret = new code_container();
+
+	// ajout dans la table la plus imbriqué
+	map_boost& hash_table = ref_tab.front();
 
 	struct identifier id;
 	BOOST_FOREACH(map_boost::value_type i, hash_table) {

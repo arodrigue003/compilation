@@ -1,10 +1,20 @@
 #include "expression.hpp"
 
-expression::expression(simple_type t, int var, map_boost& hash) : hash_table(hash), t(t), var(var) {
+expression::expression(simple_type t, int var, map_list& ref_tab) : ref_tab(ref_tab), t(t), var(var) {
 }
 
 // primary expression creation
-expression::expression(string s, map_boost& hash) : hash_table(hash) {
+expression::expression(string s, map_list& ref_tab) : ref_tab(ref_tab) {
+
+	list<map_boost>::iterator it;
+	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
+		if ((*it).find(s) != (*it).end()) {
+			 goto end;
+		}
+	}
+	end:
+	map_boost& hash = *it;
+
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
@@ -13,7 +23,7 @@ expression::expression(string s, map_boost& hash) : hash_table(hash) {
 		return;
 	}
 	else {
-		struct identifier &id = hash_table.at(s);
+		struct identifier &id = hash.at(s);
 		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {
 			// In this case, we try to laod an expression to an identifier which doesn't accept one
@@ -68,11 +78,11 @@ expression::expression(string s, map_boost& hash) : hash_table(hash) {
 	}
 }
 
-expression::expression(int i, map_boost& hash) : hash_table(hash), t(_INT), var(new_var()) {
+expression::expression(int i, map_list& ref_tab) : ref_tab(ref_tab), t(_INT), var(new_var()) {
 	code << "  %x" << var << " = add i32 0, " << i << "\n";
 }
 
-expression::expression(double d, map_boost& hash) : hash_table(hash), t(_DOUBLE), var(new_var()) {
+expression::expression(double d, map_list& ref_tab) : ref_tab(ref_tab), t(_DOUBLE), var(new_var()) {
 	char* nb_double = double_to_hex_str(d);
 	code << "  %x" << var << " = fadd double 0x000000000000000, " << nb_double << "\n";
 	free(nb_double);
@@ -80,7 +90,17 @@ expression::expression(double d, map_boost& hash) : hash_table(hash), t(_DOUBLE)
 
 
 // Function call
-expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) { //without parameter
+expression::expression(char *s, void *, map_list& ref_tab) : ref_tab(ref_tab) { //without parameter
+
+	list<map_boost>::iterator it;
+	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
+		if ((*it).find(s) != (*it).end()) {
+			 goto end;
+		}
+	}
+	end:
+
+	map_boost& hash = *it;
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
@@ -124,8 +144,17 @@ expression::expression(char *s, void *, map_boost &hash) : hash_table(hash) { //
 	}
 }
 
+expression::expression(char *s, struct arg_expr_list &ael, map_list& ref_tab) : ref_tab(ref_tab) { //with parameters
 
-expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : hash_table(hash) { //with parameters
+	list<map_boost>::iterator it;
+	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
+		if ((*it).find(s) != (*it).end()) {
+			 goto end;
+		}
+	}
+	end:
+	map_boost& hash = *it;
+
 	if (hash.find(s) == hash.end()) {
 		t = _ERROR;
 		var = -1;
@@ -295,8 +324,6 @@ expression::expression(char *s, struct arg_expr_list &ael, map_boost &hash) : ha
 	}
 }
 
-
-
 // Getters
 simple_type expression::getT() const {
 	return t;
@@ -306,8 +333,8 @@ int expression::getVar() const {
 	return var;
 }
 
-map_boost& expression::getHash() const  {
-	return hash_table;
+map_list& expression::getHash() const  {
+	return ref_tab;
 }
 
 
@@ -334,16 +361,16 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID || e2.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _BOOL || e2.t == _BOOL) {
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR || e2.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		switch (e1.t) {
@@ -353,7 +380,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 
 			case _INT:
 				// No conversion needed, both expression have the same type
-				ret = new expression(integer_res, new_var(), e1.hash_table);
+				ret = new expression(integer_res, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "  %x" << ret->getVar() << " = " << integer_op << " i32 %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
@@ -361,7 +388,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 			case _DOUBLE:
 				// Need to convert e1 from int to double
 				newV = new_var();
-				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret = new expression(double_res, new_var(), e1.ref_tab);
 				ret->code << e1.code.str();
 				ret->code << "  %x" << newV << " = sitofp i32 %x" << e1.var << " to double\n";
 				ret->code << e2.code.str();
@@ -369,7 +396,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 
 			}
@@ -381,7 +408,7 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 			case _INT:
 				// Need to convert e2 from int to double
 				newV = new_var();
-				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret = new expression(double_res, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "  %x" << newV << " = sitofp i32 %x" << e2.var << " to double\n";
 				ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << newV << "\n";
@@ -389,19 +416,19 @@ struct expression* binary_operator(const struct expression& e1, const struct exp
 
 			case _DOUBLE:
 				// No conversion needed, both expression have the same type
-				ret = new expression(double_res, new_var(), e1.hash_table);
+				ret = new expression(double_res, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "  %x" << ret->getVar() << " = " << double_op << " double %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 			}
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 
 		}
@@ -440,16 +467,16 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID || e2.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _BOOL || e2.t == _BOOL) {
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR || e2.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		int conversion;
@@ -459,7 +486,7 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 			switch (e2.t) {
 
 			case _INT:
-				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret = new expression(_INT, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
@@ -467,14 +494,14 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 			case _DOUBLE:
 				// Need to convert e2 from double to int
 				conversion = new_var();
-				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret = new expression(_INT, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
 				ret->code << "%x" << ret->getVar() << " = shl i32 %x" << e1.var << ", %x" << conversion << "\n";
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 			}
 
@@ -482,11 +509,11 @@ struct expression* operator<<(const struct expression& e1, const struct expressi
 
 		case _DOUBLE:
 			error_funct(_ERROR_COMPIL, "SHL operation canno't be applied to a double expression");
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 		}
 	}
@@ -501,16 +528,16 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID || e2.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _BOOL || e2.t == _BOOL) {
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR || e2.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		int conversion;
@@ -520,7 +547,7 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 			switch (e2.t) {
 
 			case _INT:
-				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret = new expression(_INT, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
@@ -528,14 +555,14 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 			case _DOUBLE:
 				// Need to convert e2 from double to int
 				conversion = new_var();
-				ret = new expression(_INT, new_var(), e1.hash_table);
+				ret = new expression(_INT, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << conversion <<  " = fptosi double %x" << e2.var << " to i32\n";
 				ret->code << "%x" << ret->getVar() << " = ashr i32 %x" << e1.var << ", %x" << conversion << "\n";
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 			}
 
@@ -543,11 +570,11 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 
 		case _DOUBLE:
 			error_funct(_ERROR_COMPIL, "SHR operation canno't be applied to a double expression");
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 		}
 	}
@@ -559,18 +586,26 @@ struct expression* operator>>(const struct expression& e1, const struct expressi
 struct expression* expression::operator=(string s) {
 	struct expression* ret;
 
-	if (hash_table.find(s) == hash_table.end()) {
-		ret = new expression(_ERROR, -1, hash_table);
+	list<map_boost>::iterator it;
+	for(it=ref_tab.begin(); it != ref_tab.end(); ++it) {
+		if ((*it).find(s) != (*it).end()) {
+			 goto end;
+		}
+	}
+	end:
+	map_boost& hash = *it;
+
+	if (hash.find(s) == hash.end()) {
+		ret = new expression(_ERROR, -1, ref_tab);
 		error_funct(_ERROR_COMPIL, s, " was not declared in this scope");
 	}
-
 	else {
-		struct identifier &id = hash_table.at(s);
+		struct identifier &id = hash.at(s);
 		id.used = true;
 		if (id.symbolType != _LOCAL_VAR && id.symbolType != _GLOBAL_VAR) {
 			// In this case, we try to assign an expression to an identifier which doesn't accept one
 			// For exemple we try to assign an expression to a function name
-			ret = new expression(_ERROR, -1, hash_table);
+			ret = new expression(_ERROR, -1, ref_tab);
 			error_funct(_ERROR_COMPIL, "Can't assign an expression to ", s);
 		}
 		else {
@@ -579,16 +614,16 @@ struct expression* expression::operator=(string s) {
 			// Error gestion : if used in order to avoid repetition in the switch
 			if (t == _VOID || id.t == _VOID) {
 				error_funct(_ERROR_COMPIL, "invalid use of void expression");
-				ret = new expression(_ERROR, -1, hash_table);
+				ret = new expression(_ERROR, -1, ref_tab);
 			}
 			else if (t == _BOOL || id.t == _BOOL) {
 				error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-				ret = new expression(_ERROR, -1, hash_table);
+				ret = new expression(_ERROR, -1, ref_tab);
 			}
 			else if (t == _ERROR || id.t == _ERROR) {
 				// In this case, we consider that the expression has already an error and we don't consider others errors
 				// in order to don't flood the error output with big expressions.
-				ret = new expression(_ERROR, -1, hash_table);
+				ret = new expression(_ERROR, -1, ref_tab);
 			}
 			else {
 				switch (id.t) {
@@ -598,7 +633,7 @@ struct expression* expression::operator=(string s) {
 
 					case _INT:
 						// No conversion needed
-						ret = new expression(_INT, var, hash_table);
+						ret = new expression(_INT, var, ref_tab);
 						ret->code << code.str();
 						ret->code << "  store i32 %x" << var << ", i32* " << id.name << "\n";
 						break;
@@ -606,7 +641,7 @@ struct expression* expression::operator=(string s) {
 					case _DOUBLE:
 						// Need to convert expression from double to int
 						newVar = new_var();
-						ret = new expression(_INT, newVar, hash_table);
+						ret = new expression(_INT, newVar, ref_tab);
 						ret->code << code.str();
 						ret->code << "  %x" << newVar <<  " = fptosi double %x" << var << " to i32\n";
 						ret->code << "  store i32 %x" << newVar << ", i32* " << id.name << "\n";
@@ -625,7 +660,7 @@ struct expression* expression::operator=(string s) {
 					case _INT:
 						// Need to convert expression from int to double
 						newVar = new_var();
-						ret = new expression(_DOUBLE, newVar, hash_table);
+						ret = new expression(_DOUBLE, newVar, ref_tab);
 						ret->code << code.str();
 						ret->code << "  %x" << newVar << " = sitofp i32 %x" << var << " to double\n";
 						ret->code << "  store double %x" << newVar << ", double* " << id.name << "\n";
@@ -633,13 +668,13 @@ struct expression* expression::operator=(string s) {
 
 					case _DOUBLE:
 						// No conversion needed
-						ret = new expression(_DOUBLE, var, hash_table);
+						ret = new expression(_DOUBLE, var, ref_tab);
 						ret->code << code.str();
 						ret->code << "  store double %x" << var << ", double* " << id.name << "\n";
 						break;
 
 					default:
-						ret = new expression(_ERROR, -1, hash_table);
+						ret = new expression(_ERROR, -1, ref_tab);
 						break;
 
 					}
@@ -658,7 +693,7 @@ struct expression* expression::operator=(string s) {
 
 struct expression* expression::operator+=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 + *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -667,7 +702,7 @@ struct expression* expression::operator+=(string s) {
 
 struct expression* expression::operator-=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 - *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -676,7 +711,7 @@ struct expression* expression::operator-=(string s) {
 
 struct expression* expression::operator*=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1** this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -685,7 +720,7 @@ struct expression* expression::operator*=(string s) {
 
 struct expression* expression::operator/=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 / *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -694,7 +729,7 @@ struct expression* expression::operator/=(string s) {
 
 struct expression* expression::operator%=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 % *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -703,7 +738,7 @@ struct expression* expression::operator%=(string s) {
 
 struct expression* expression::operator<<=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 << *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -712,7 +747,7 @@ struct expression* expression::operator<<=(string s) {
 
 struct expression* expression::operator>>=(string s) {
 	struct expression* ret;
-	struct expression* e1 = new expression(s, hash_table);
+	struct expression* e1 = new expression(s, ref_tab);
 	struct expression* e2 = *e1 >> *this;
 	ret = (*e2 = s);
 	delete e1; e1 = nullptr; delete e2; e2 = nullptr;
@@ -753,16 +788,16 @@ struct expression* operator&&(const struct expression& e1, const struct expressi
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID || e2.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _INT || e1.t == _DOUBLE || e2.t == _INT || e2.t == _DOUBLE) {
 		error_funct(_ERROR_COMPIL, "Can't apply a logical operator between booleans and other types");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR || e2.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		switch (e1.t) {
@@ -771,20 +806,20 @@ struct expression* operator&&(const struct expression& e1, const struct expressi
 			switch (e2.t) {
 
 			case _BOOL:
-				ret = new expression(_BOOL, new_var(), e1.hash_table);
+				ret = new expression(_BOOL, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << ret->getVar() << " = and i1 %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 			}
 
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 		}
 	}
@@ -797,16 +832,16 @@ struct expression* operator||(const struct expression& e1, const struct expressi
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID || e2.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _INT || e1.t == _DOUBLE || e2.t == _INT || e2.t == _DOUBLE) {
 		error_funct(_ERROR_COMPIL, "Can't apply a logical operator between booleans and other types");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR || e2.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		switch (e1.t) {
@@ -815,20 +850,20 @@ struct expression* operator||(const struct expression& e1, const struct expressi
 			switch (e2.t) {
 
 			case _BOOL:
-				ret = new expression(_BOOL, new_var(), e1.hash_table);
+				ret = new expression(_BOOL, new_var(), e1.ref_tab);
 				ret->code << e1.code.str() << e2.code.str();
 				ret->code << "%x" << ret->getVar() << " = or i1 %x" << e1.var << ", %x" << e2.var << "\n";
 				break;
 
 			default:
-				ret = new expression(_ERROR, -1, e1.hash_table);
+				ret = new expression(_ERROR, -1, e1.ref_tab);
 				break;
 			}
 
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 		}
 	}
@@ -841,27 +876,27 @@ struct expression* operator!(const struct expression& e1) { // ! is equivalent t
 	// Error gestion : if used in order to avoid repetition in the switch
 	if (e1.t == _VOID) {
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _INT || e1.t == _DOUBLE) {
 		error_funct(_ERROR_COMPIL, "Can't apply a logical operator between booleans and other types");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else if (e1.t == _ERROR) {
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 	}
 	else {
 		switch (e1.t) {
 		case _BOOL:
-			ret = new expression(_BOOL, new_var(), e1.hash_table);
+			ret = new expression(_BOOL, new_var(), e1.ref_tab);
 			ret->code << e1.code.str();
 			ret->code << "%x" << ret->getVar() << " = xor i1 %x" << e1.var << ", 1\n";
 			break;
 
 		default:
-			ret = new expression(_ERROR, -1, e1.hash_table);
+			ret = new expression(_ERROR, -1, e1.ref_tab);
 			break;
 		}
 	}
@@ -870,9 +905,9 @@ struct expression* operator!(const struct expression& e1) { // ! is equivalent t
 
 
 // unary operators expressions
-struct expression *incr_postfix(string name, map_boost &hash_table) {
+struct expression *incr_postfix(string name, map_list &ref_table) {
 	struct expression *ret;
-	struct expression e1(name, hash_table);
+	struct expression e1(name, ref_table);
 
 	int var;
 	int backup = e1.getVar();
@@ -895,32 +930,32 @@ struct expression *incr_postfix(string name, map_boost &hash_table) {
 
 	case _VOID:
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	case _BOOL:
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	case _ERROR:
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	default:
 		// If you see this something really goes wrong withe the compiler
 		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 	}
 	return ret;
 }
 
-struct expression *decr_postfix(string name, map_boost &hash_table) {
+struct expression *decr_postfix(string name, map_list &ref_table) {
 	struct expression *ret;
-	struct expression e1(name, hash_table);
+	struct expression e1(name, ref_table);
 
 	int var;
 	int backup = e1.getVar();
@@ -943,32 +978,32 @@ struct expression *decr_postfix(string name, map_boost &hash_table) {
 
 	case _VOID:
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	case _BOOL:
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	case _ERROR:
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 
 	default:
 		// If you see this something really goes wrong withe the compiler
 		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_table);
 		break;
 	}
 	return ret;
 }
 
-struct expression *incr_prefix(string name, map_boost &hash_table) {
+struct expression *incr_prefix(string name, map_list &ref_tab) {
 	struct expression *ret;
-	struct expression e1(name, hash_table);
+	struct expression e1(name, ref_tab);
 
 	int var;
 	int backup = e1.getVar();
@@ -989,32 +1024,32 @@ struct expression *incr_prefix(string name, map_boost &hash_table) {
 
 	case _VOID:
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	case _BOOL:
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	case _ERROR:
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	default:
 		// If you see this something really goes wrong withe the compiler
 		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 	}
 	return ret;
 }
 
-struct expression *decr_prefix(string name, map_boost &hash_table) {
+struct expression *decr_prefix(string name, map_list &ref_tab) {
 	struct expression *ret;
-	struct expression e1(name, hash_table);
+	struct expression e1(name, ref_tab);
 
 	int var;
 	int backup = e1.getVar();
@@ -1035,24 +1070,24 @@ struct expression *decr_prefix(string name, map_boost &hash_table) {
 
 	case _VOID:
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	case _BOOL:
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	case _ERROR:
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 
 	default:
 		// If you see this something really goes wrong withe the compiler
 		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, hash_table);
+		ret = new expression(_ERROR, -1, ref_tab);
 		break;
 	}
 	return ret;
@@ -1063,37 +1098,37 @@ struct expression *opposite(const struct expression &e1){
 
 	switch (e1.getT()) {
 	case _INT:
-		ret = new expression(_INT, new_var(), e1.hash_table);
+		ret = new expression(_INT, new_var(), e1.ref_tab);
 		ret->code << e1.code.str();
 		ret->code << "  %x" << ret->getVar() << " = sub i32 0, %x" << e1.getVar() << "\n";
 		break;
 
 	case _DOUBLE:
-		ret = new expression(_DOUBLE, new_var(), e1.hash_table);
+		ret = new expression(_DOUBLE, new_var(), e1.ref_tab);
 		ret->code << e1.code.str();
 		ret->code << "  %x" << ret->getVar() << " = fsub double 0x000000000000000, %x" << e1.getVar() << "\n";
 		break;
 
 	case _VOID:
 		error_funct(_ERROR_COMPIL, "invalid use of void expression");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 		break;
 
 	case _BOOL:
 		error_funct(_ERROR_COMPIL, "implicit conversion from type 'boolean' to an other type is not allowed");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 		break;
 
 	case _ERROR:
 		// In this case, we consider that the expression has already an error and we don't consider others errors
 		// in order to don't flood the error output with big expressions.
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 		break;
 
 	default:
 		// If you see this something really goes wrong withe the compiler
 		error_funct(_ERROR_COMPIL, "if you see this something really goes wrong with the compiler");
-		ret = new expression(_ERROR, -1, e1.hash_table);
+		ret = new expression(_ERROR, -1, e1.ref_tab);
 		break;
 	}
 	return ret;

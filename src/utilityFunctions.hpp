@@ -5,12 +5,14 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <list>
 
 using namespace std;
 
 #include <boost/foreach.hpp>
 #include <boost/unordered_map.hpp>
 typedef boost::unordered_map<std::string, struct identifier> map_boost;
+typedef list<map_boost> map_list;
 
 extern bool has_error;
 
@@ -63,7 +65,7 @@ struct declaration_list : public code_container {
     vector<identifier> idList;
 
 public:
-	declaration_list(enum simple_type t, string name, map_boost &hash_table);
+	declaration_list(enum simple_type t, string name, map_list &ref_tab);
 	declaration_list() : code_container(){}
 };
 
@@ -89,7 +91,7 @@ int error_funct(enum error_type et, string s1, string s2);
 
 //Function to add p5 functions to the hash table in order to recognize them
 void setup_p5(map_boost &hash);
-struct code_container* declare_q5_used_functions(map_boost &hash_table);
+struct code_container* declare_q5_used_functions(map_list &ref_tab);
 
 
 #endif // UTILITYFUNCTIONS_HPP

@@ -44,7 +44,10 @@ ofstream output;
 //Hash map
 map_boost global_hash_table;
 
-//utility functions
+// Create global reference table and add the global map
+map_list ref_tab;
+
+
 stringstream code;
 
 %}
@@ -91,16 +94,16 @@ stringstream code;
 primary_expression
 : IDENTIFIER
 {
-    $$ = new expression($1, global_hash_table);
+    $$ = new expression($1, ref_tab);
     free($1); $1 = nullptr;
 }
 | CONSTANTI    
 {
-    $$ = new expression($1, global_hash_table);
+    $$ = new expression($1, ref_tab);
 }
 | CONSTANTD
 {
-    $$ = new expression($1, global_hash_table);
+    $$ = new expression($1, ref_tab);
 }
 | '(' expression ')'
 {
@@ -108,12 +111,12 @@ primary_expression
 }
 | IDENTIFIER '(' ')' //appel de fonction
 {
-    $$ = new expression($1, nullptr, global_hash_table);
+    $$ = new expression($1, nullptr, ref_tab);
     free($1); $1 = nullptr;
 }
 | IDENTIFIER '(' argument_expression_list ')' //appel de fonction
 {
-    $$ = new expression($1, *$3, global_hash_table);
+    $$ = new expression($1, *$3, ref_tab);
     free($1); $1 = nullptr; delete $3; $3 = nullptr;
 }
 ;
@@ -126,13 +129,13 @@ postfix_expression
 | IDENTIFIER INC_OP
 // simplification de : postfix_expression INC_OP
 {
-    $$ = incr_postfix($1, global_hash_table);
+    $$ = incr_postfix($1, ref_tab);
     free($1); $1 = nullptr;
 }
 | IDENTIFIER DEC_OP
 // simplification de postfix_expression DEC_OP
 {
-    $$ = decr_postfix($1, global_hash_table);
+    $$ = decr_postfix($1, ref_tab);
     free($1); $1 = nullptr;
 }
 ;
@@ -158,13 +161,13 @@ unary_expression
 | INC_OP IDENTIFIER
 // simplification de : INC_OP unary_expression
 {
-    $$ = incr_prefix($2, global_hash_table);
+    $$ = incr_prefix($2, ref_tab);
     free($2); $2 = nullptr;
 }
 | DEC_OP IDENTIFIER
 // simplification de : DEC_OP unary_expression
 {
-    $$ = decr_prefix($2, global_hash_table);
+    $$ = decr_prefix($2, ref_tab);
     free($2); $2 = nullptr;
 }
 | '-' unary_expression
@@ -349,7 +352,7 @@ expression
             break;
 
         default:
-            $$ = new expression(_ERROR, -1, global_hash_table);
+            $$ = new expression(_ERROR, -1, ref_tab);
             error_funct(_ERROR_COMPIL, "Unexpected symbol");
             break;
     }
@@ -400,7 +403,7 @@ assignment_operator
 declaration
 : type_name declarator_list ';'
 {
-    $$ = local_declaration($1, *$2, global_hash_table);
+    $$ = local_declaration($1, *$2, ref_tab);
     delete $2; $2 = nullptr;
 }
 ;
@@ -408,7 +411,7 @@ declaration
 global_declaration
 : type_name declarator_list ';'
 {
-    $$ = global_declaration($1, *$2, global_hash_table);
+    $$ = global_declaration($1, *$2, ref_tab);
     delete $2; $2 = nullptr;
 }
 ;
@@ -470,7 +473,7 @@ parameter_declaration
 : type_name IDENTIFIER
 // simplification de type_name declarator
 {
-    $$ = new declaration_list($1, $2, global_hash_table);
+    $$ = new declaration_list($1, $2, ref_tab);
     free($2); $2 = nullptr;
 }
 ;
@@ -647,7 +650,7 @@ jump_statement
 program_entry
 : program
 {
-    struct code_container *cc = declare_q5_used_functions(global_hash_table);
+    struct code_container *cc = declare_q5_used_functions(ref_tab);
 
     if (!has_error) {
         if (debug) {
@@ -695,12 +698,12 @@ external_declaration
 function_declaration
 : type_name IDENTIFIER '(' type_list ')' ';'
 {
-    $$ = declare_funct($1, $2, *$4, global_hash_table);
+    $$ = declare_funct($1, $2, *$4, ref_tab);
     free($2); $2 = nullptr; delete $4; $4 = nullptr;
 }
 | type_name IDENTIFIER '(' ')' ';'
 {
-    $$ = declare_funct($1, $2, global_hash_table);
+    $$ = declare_funct($1, $2, ref_tab);
     free($2); $2 = nullptr;
 }
 ;
@@ -721,12 +724,12 @@ function_definition
 /* : type_name declarator compound_statement */
 : type_name IDENTIFIER '(' parameter_list ')' compound_statement
 {
-    $$ = define_funct($1, $2, $4, $6, global_hash_table);
+    $$ = define_funct($1, $2, $4, $6, ref_tab);
     delete $4; $4 = nullptr; delete $6; $6 = nullptr; free($2); $2 = nullptr;
 }
 | type_name IDENTIFIER '(' ')' compound_statement
 {
-    $$ = define_funct($1, $2, $5, global_hash_table);
+    $$ = define_funct($1, $2, $5, ref_tab);
     delete $5; $5 = nullptr; free($2); $2 = nullptr;
 }
 ;
@@ -803,12 +806,15 @@ int main (int argc, char *argv[]) {
     // setup debug flag
     (vm.count("debug")) ? debug = true : debug = false;
 
-    setup_p5(global_hash_table);
+    // setup map_list
+    ref_tab.push_front(map_boost());
+    setup_p5(ref_tab.front());
+
 
     if (yyparse() == 1)
         return EXIT_FAILURE;
 
-    BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+    /*BOOST_FOREACH(map_boost::value_type i, ref_tab) {
         if (i.second.from_q5 == false && !i.second.used) {
             if (i.second.symbolType == _LOCAL_VAR || i.second.symbolType == _GLOBAL_VAR)
                 error_funct(_WARNING_COMPIL, "unused variable ", i.first);
@@ -816,11 +822,11 @@ int main (int argc, char *argv[]) {
                 // We can use == comparison because i.first is a string (cf utilityFunction header)
                 error_funct(_WARNING_COMPIL, "unused function ", i.first);
         }
-    }
+    }*/
 
     if (debug) {
-        cout << "Intern Symbol table at the end of parser execution" << endl;
-        BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+        /*cout << "Intern Symbol table at the end of parser execution" << endl;
+        BOOST_FOREACH(map_boost::value_type i, ref_tab) {
             if (i.second.from_q5 == false) {
                 if (i.second.symbolType == _LOCAL_VAR)
                     cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
@@ -835,7 +841,7 @@ int main (int argc, char *argv[]) {
         }
 
         cout << endl << "p5 Symbol table at the end of parser execution" << endl;
-        BOOST_FOREACH(map_boost::value_type i, global_hash_table) {
+        BOOST_FOREACH(map_boost::value_type i, ref_tab) {
             if (i.second.from_q5 == true) {
                 if (i.second.symbolType == _LOCAL_VAR)
                     cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
@@ -845,6 +851,39 @@ int main (int argc, char *argv[]) {
                     cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
                     BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
                         cout << "  - " << st << endl;
+                }
+            }
+        }*/
+
+        cout << "Intern Symbol table at the end of parser execution" << endl;
+
+        BOOST_FOREACH(list<map_boost>::value_type hash, ref_tab) {
+            BOOST_FOREACH(map_boost::value_type i, hash) {
+                if (i.second.from_q5 == false) {
+                    if (i.second.symbolType == _LOCAL_VAR)
+                        cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    else if (i.second.symbolType == _GLOBAL_VAR)
+                        cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    else if (i.second.symbolType == _FUNCTION) {
+                        cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                        BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                            cout << "  - " << st << endl;
+                    }
+                }
+            }
+
+            cout << endl << "p5 Symbol table at the end of parser execution" << endl;
+            BOOST_FOREACH(map_boost::value_type i, hash) {
+                if (i.second.from_q5 == true) {
+                    if (i.second.symbolType == _LOCAL_VAR)
+                        cout<<"LVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    else if (i.second.symbolType == _GLOBAL_VAR)
+                        cout<<"GVAR : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                    else if (i.second.symbolType == _FUNCTION) {
+                        cout<<"FUNC : " << i.first<<" :"<<i.second.t<<','<<i.second.name<<','<<i.second.used<<endl;
+                        BOOST_FOREACH(enum simple_type st, i.second.paramTypes)
+                            cout << "  - " << st << endl;
+                    }
                 }
             }
         }

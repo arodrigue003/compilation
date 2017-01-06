@@ -23,18 +23,18 @@ struct code_container* while_then(const struct expression& e1, const struct code
 struct code_container* do_while(const struct code_container& s1, const struct expression& e1);
 
 // used for function declaration
-struct code_container* declare_funct(enum simple_type t, string name, map_boost &hash_table);
-struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_boost &hash_table);
+struct code_container* declare_funct(enum simple_type t, string name, map_list &ref_tab);
+struct code_container* declare_funct(enum simple_type t, string name, struct type_list tl, map_list &ref_tab);
 
 // declaration
-struct code_container* local_declaration(enum simple_type t, struct declaration_list &decla, map_boost &hash_table);
-struct code_container* global_declaration(enum simple_type t, struct declaration_list &decla, map_boost &hash_table);
+struct code_container* local_declaration(enum simple_type t, struct declaration_list &decla, map_list &ref_tab);
+struct code_container* global_declaration(enum simple_type t, struct declaration_list &decla, map_list &ref_tab);
 
 // return
 struct code_container *return_statement(struct expression& e1);
 
 // Function definition
-struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_boost &hash_table);
-struct code_container *define_funct(enum simple_type t, string name, struct code_container *code, map_boost &hash_table);
+struct code_container *define_funct(enum simple_type t, string name, struct declaration_list *decla, struct code_container *code, map_list &ref_tab);
+struct code_container *define_funct(enum simple_type t, string name, struct code_container *code, map_list &ref_tab);
 
 #endif // STATEMENT_HPP
