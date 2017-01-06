@@ -8,6 +8,8 @@ enable_testing()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -O0 -g -std=c++11")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -O0 -g -std=gnu11")
 
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setenv.sh ${CMAKE_CURRENT_BINARY_DIR}/setenv.sh @ONLY)
 # Define where headers only libs and statics libs are located
 #include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/third_party)
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/third_party/boost)
